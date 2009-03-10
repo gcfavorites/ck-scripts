@@ -24,6 +24,7 @@ proc ::w3org::init {  } {
 
     msgreg {
         err.http        &BОшибка связи с сайтом&K:&R %s
+        err.cant        Sorry! This document can not be checked.
         weird           "эта строка не похожа на правильный урл, попробуй еще раз ;)"
         main            %s&n.
         param           &K%s&n:&r %s
@@ -48,13 +49,14 @@ proc ::w3org::run { sid } {
 
         set Text [string map -nocase [list "http://" ""] $Text]
 
-        set Text [string map -nocase [list "\?" "%3F" "\#" "" "\&" "%26"] $Text]
-
         session set type [list [lindex $StdArgs 2]]
 
         http run "http://validator.w3.org/check" \
                 -post \
-                -query [list "uri" "http://${Text}"] \
+                -query [list \
+                            "uri" "http://${Text}" "charset" "(detect automatically)" \
+                            "doctype" "Inline" "group" "0"\
+                        ] \
                 -mark "Start" \
                 -useragent "Opera/9.61 (X11; Linux i686; U; en) Presto/2.1.1"
 
@@ -104,8 +106,11 @@ proc ::w3org::run { sid } {
 
             unset _ -> res url
 
+        } elseif {[string first "Sorry! This document can not be checked." $HttpData] == -1} {
+            reply -err cant
+        } else {
+            reply -err "Ошибка"
         }
-
     }
 
     return
