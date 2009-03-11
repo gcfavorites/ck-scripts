@@ -13,8 +13,8 @@ namespace eval ::gettitle {
     variable alltypes   [list "text/html" "text/wml" "text/vnd.wap.wml" \
                           "text/xml" "application/xml" "application/rss+xml" \
                         ]
-                        
-	variable tignores [list]
+
+    variable tignores [list]
 
     namespace import -force ::ck::cmd::*
     namespace import -force ::ck::http::http
@@ -23,10 +23,10 @@ namespace eval ::gettitle {
 
 
 proc ::gettitle::init {  } {
-	variable tignores
-	
-	datafile register tignores -net -bot
-	
+    variable tignores
+
+    datafile register tignores -net -bot
+
 
 
     cmd register gettitle [namespace current]::run -doc "gettitle" -autousage \
@@ -56,27 +56,27 @@ proc ::gettitle::init {  } {
     cmd doc -link [list "gettitle" "gettitle.unignore" "gettitle.search" "gettitle.list"] \
     	"gettitle.ignore" {~*!tignore* <url>~ - добавить сайт в список игнорируемых (можно использовать маски).}
 
-	cmd doc -link [list "gettitle" "gettitle.ignore" "gettitle.search" "gettitle.list"] \
-		"gettitle.unignore" {~*!tunignore* <url>~ - удалить сайт из списка игнорируемых (можно использовать маски).}
+    cmd doc -link [list "gettitle" "gettitle.ignore" "gettitle.search" "gettitle.list"] \
+        "gettitle.unignore" {~*!tunignore* <url>~ - удалить сайт из списка игнорируемых (можно использовать маски).}
 
-	cmd doc -link [list "gettitle" "gettitle.ignore" "gettitle.unignore" "gettitle.list"] \
-		"gettitle.search" {~*!tsearch* <домен/шаблон>~ - поиск в списке игноров.}
+    cmd doc -link [list "gettitle" "gettitle.ignore" "gettitle.unignore" "gettitle.list"] \
+        "gettitle.search" {~*!tsearch* <домен/шаблон>~ - поиск в списке игноров.}
 
-	cmd doc -link [list "gettitle" "gettitle.ignore" "gettitle.unignore" "gettitle.search"] \
-		 "gettitle.list" {~*!tlist*~ - показать список игноров.}
+    cmd doc -link [list "gettitle" "gettitle.ignore" "gettitle.unignore" "gettitle.search"] \
+         "gettitle.list" {~*!tlist*~ - показать список игноров.}
 
 
-	
+
     config register -id "auto" -type int -default 1 \
         -desc "Автоматически выхватывать ссылки из сообщений на каналах" -access "n" -folder "gettitle"
-        
-  	config register -id "forceonchans" -type list -default [list] \
-    	-desc "Форсировать автоматическую обработку сообщений в канале." -access "n" -folder "gettitle" \
-    	-disableon [list "auto" 1]
+
+    config register -id "forceonchans" -type list -default [list] \
+        -desc "Форсировать автоматическую обработку сообщений в канале." -access "n" -folder "gettitle" \
+        -disableon [list "auto" 1]
 
     config register -id "ignore" -type str -default "I|-" \
         -desc "Флаг для игнорируемых юзеров." -access "n" -folder "gettitle"
-        
+
     config register -id "maxlen" -type int -default 200 \
         -desc "Максимальная длина выводимого заголовка" -access "n" -folder "gettitle"
 
@@ -85,45 +85,45 @@ proc ::gettitle::init {  } {
 
 
 
-	set tignores [datafile getlist tignores]
+    set tignores [datafile getlist tignores]
 
     msgreg {
-        main             &L&ptitle&L&n: &K<&B%s&K>&n
-        exists			домен или шаблон &K<&R%s&K>&n уже в списке игнорирования &K(&g%s&K)&n
-        notexists	    домен или шаблон &K<&R%s&K>&n не найден в списке игнорирования
-        
-        add				домен или шаблон &K<&R%s&K>&n добавлен в список игнорирования
-        del				домен или шаблон &K<&R%s&K>&n удален из списка игнорирования
-        
-        found				домен или шаблон &K<&R%s&K>&n найден списке игнорирования &K(&g%s&K)&n
-        notfound		домен или шаблон &K<&R%s&K>&n не найден списке игнорирования
-        
-        join.ignores	"&K,&R "
+        err.badurl      эта строка не похожа на ссылку
+
+        main            &L&ptitle&L&n: &K<&B%s&K>&n
+
+        exists          домен или шаблон &K<&R%s&K>&n уже в списке игнорирования &K(&g%s&K)&n
+        notexists       домен или шаблон &K<&R%s&K>&n не найден в списке игнорирования
+
+        add             домен или шаблон &K<&R%s&K>&n добавлен в список игнорирования
+        del             домен или шаблон &K<&R%s&K>&n удален из списка игнорирования
+
+        found           домен или шаблон &K<&R%s&K>&n найден списке игнорирования &K(&g%s&K)&n
+        notfound        домен или шаблон &K<&R%s&K>&n не найден списке игнорирования
+
+        join.ignores    "&K,&R "
     }
 }
 
 proc ::gettitle::seturl {ustr} {
 
+    set end [list   "\"" "'" "`" "," ";" "#" \
+                    "\\s" "\\\\" "\\(" "\\)" "\\\[" "\\\]" "\\\{" "\\\}" \
+                    "\017" "\026" \
+            ]
+
+    set end [join $end ""]
+    set ustr [stripcodes bcruag $ustr]
     set url ""
 
-    set end [list   "\\s" "\$" "\"" "'" "`" \
-                    ";" "\\\\" "," "\\(" "\\)" \
-                    "#" \
-                    "\\\[" "\\\]" "\\{" "\\}" \
-                    "\017" "\026" \
-            	]
-
-    set ustr [stripcodes bcruag $ustr]
-    set end [join $end ""]
-
-    if {[regexp -nocase -- "(http://\[^$end\]+).*" $ustr -> url] \
-            || [regexp -nocase -- "(w(?:ap|ww)\\.\[^$end\]+).*" $ustr -> url]} {
+    if {[regexp -nocase -- "(http://\[^${end}\]+).*" $ustr -> url] \
+            || [regexp -nocase -- "(w(?:ap|ww)\\.\[^${end}\]+).*" $ustr -> url]} {
         set url [string trimright $url "."]
 
         unset ->
     }
 
-    unset ustr end
+    unset end
 
     return $url
 }
@@ -132,11 +132,11 @@ proc ::gettitle::seturl {ustr} {
 proc ::gettitle::filter { } {
     foreach_ {Text Nick UserHost Handle Channel CmdDCC CmdEvent} { upvar $_ $_ }
 
-	if {![config get auto] \
-			&& ![llength [lfilter -keep -nocase -- [config get forceonchans] $Channel]]} {
-#			debug -debug "automode disabled"
-		return		
-	}
+    if {![config get auto] \
+            && ![llength [lfilter -keep -nocase -- [config get forceonchans] $Channel]]} {
+#        debug -debug "automode disabled"
+        return
+    }
 
     variable denpr
 
@@ -167,41 +167,42 @@ proc ::gettitle::run { sid } {
     session import
 
     if { $Event eq "CmdPass"  } {
-        set url [lindex $StdArgs 1]
+        set url [lindex [split [lindex $StdArgs 1] "#"] 0]
 
-        if {($CmdEventMark eq "FilterMark") \
-                || ([string match "*.*" $url] && [string length $url] > 4)} {
+        if {[string first "." $url] < 1 || [string length $url] < 4} {
+            reply -err badurl
+            return
+        }
 
-            set url [lindex [split $url "#"] 0]
+        if {$CmdEventMark eq "FilterMark"} {
+            variable tignores
 
-			variable tignores
-            
             regexp -- {^(?:https?://)?(?:www\.)?([^/\?]+)} $url -> dom
-#            debug $dom
-            
-            
+#            debug "Домен: $dom"
+
+
             set i ""
             set_ ""
-    		foreach_ $tignores {
-    			if {[string match -nocase $_ $dom]} {
-    				set i $_
-    				break
-    			}
-    		}
-    		
-    		if {$i eq ""} {
-            	http run $url \
-                	-mark "Get" \
-                	-norecode \
-                	-readlimit [config get readlimit] \
-                	-redirects 5 \
-                	-useragent "Opera/9.62 (X11; Linux i686; U; en) Presto/2.1.1"
-        	} else {
-        		debug [regsub -all -- {\&[a-zA-Z]} [::ck::cmd::stripMAGIC [cformat found $dom $i]] ""]
-        	}
-        	
-        	unset _ i dom
+            foreach_ $tignores {
+                if {[string match -nocase $_ $dom]} {
+                    set i $_
+    		    break
+                }
+    	    }
+
+            if {$i ne ""} {
+                debug -err [regsub -all -- {\&[a-zA-Z]} [::ck::cmd::stripMAGIC [cformat found $dom $i]] ""]
+                return
+            }
+            unset _ i dom
         }
+
+        http run $url \
+            -mark "Get" \
+            -norecode \
+            -readlimit [config get readlimit] \
+            -redirects 5 \
+            -useragent "Opera/9.62 (X11; Linux i686; U; en) Presto/2.1.1"
 
         unset url
         return
@@ -222,20 +223,13 @@ proc ::gettitle::run { sid } {
 ## Убрал кошерный in для совместимости с древним тиклем :'(
 
         if {[info exists tmp(Content-Type)] \
-                && ([lsearch $alltypes [set v [lindex [split $tmp(Content-Type) ";"] 0]]] != -1)} {
+                && ([lsearch $alltypes [lindex [split $tmp(Content-Type) ";"] 0]] != -1)} {
 
             set title [get_title $HttpData]
 
             debug -debug "rawtitle: $title"
 
-            if {![regexp -nocase -- {<meta[^>]+charset\s*=\s*([^\s\"\'>]+).*?>} $HttpData -> cp] \
-                    || ![regexp -nocase -- {<?xml\s+version[^>]+encoding="([^\s\'\/\>]+)"} $HttpData -> cp]} {
-                set cp $HttpMetaCharset
-            }
-
-            if {[set cp [::ck::http::charset2encoding $cp]] eq "binary"} {
-                set cp "cp1251"
-            }
+            set cp [get_cp $HttpData $HttpMetaCharset]
 
             set title [encoding convertfrom $cp $title]
 
@@ -254,7 +248,7 @@ proc ::gettitle::run { sid } {
                 reply -noperson -uniq main $title
             }
 
-            unset maxlen cp title v
+            unset maxlen cp title
 
         } else {
             debug -debug "Unknown \"Content-Type\""
@@ -271,75 +265,73 @@ proc ::gettitle::ignore { sid } {
 
     if { $Event eq "CmdPass"  } {
     	variable tignores
-    	
+
     	set Text [lindex $StdArgs 1]
 
     	set i ""
     	set_ ""
-    		
+
     	# юзаем foreach для совместимости
     	foreach_ $tignores {
-    		if {[string match -nocase $Text $_] \
-    				|| [string match -nocase $_ $Text]} {
-    			set i $_
-    			break
-    		}
+            if {[string match -nocase $Text $_] \
+                    || [string match -nocase $_ $Text]} {
+                set i $_
+    		break
+    	    }
     	}
 
-		switch -exact -- $CmdId {
-			"gettitleignore" {
-    				if {$i eq ""} {
-    					lappend tignores $Text
-    			
-    					datafile putlist tignores $tignores
-    			
-    					reply add $Text
-    				} else {
-    					reply exists $Text $i
-    				}
-    		}
+	switch -exact -- $CmdId {
+            "gettitleignore" {
+                if {$i eq ""} {
+                    lappend tignores $Text
+                    datafile putlist tignores $tignores
 
-    		"gettitleunignore" {
-		    		if {$i eq ""} {
-		    			reply notexists $Text
-    				} else {
-		    			set nignores [list]
-    	   				foreach_ $tignores {
-    						if {[string match -nocase $Text $_]} {
-    							continue
-    						}
-    						lappend nignores $_
-		    			}
-    					set tignores $nignores
+                    reply add $Text
+            	} else {
+                    reply exists $Text $i
+		}
+            }
 
-    					datafile putlist tignores $tignores
+            "gettitleunignore" {
+		if {$i eq ""} {
+                    reply notexists $Text
+    		} else {
+                    set nignores [list]
+                    foreach_ $tignores {
+                        if {[string match -nocase $Text $_]} { continue }
 
-						reply del $Text
-    			
-    					unset nignores
-    				}
-    		}
+                	lappend nignores $_
+	   	    }
 
-    		"gettitlesearch" {
-    				if {$i eq ""} {
-    					reply found $Text $i
-    				} else {
-    					reply notfound $Text
-    				}
+                    set tignores $nignores
+                    datafile putlist tignores $tignores
+                    reply del $Text
+
+                    unset nignores
+		}
+    	    }
+
+            "gettitlesearch" {
+    		if {$i eq ""} {
+                    reply found $Text $i
+    		} else {
+                    reply notfound $Text
     		}
-    		
-    		"gettitlelist" {
-    			set_ [cjoin $tignores "join.ignores"]
-    			
-    			if {[string length $_] > 225} {
-	                session set CmdReplyParam [list "-private" "-multi" "-multi-max" "-1" "-return"]
-            	}
-            	reply $_
-    		}
+            }
+
+            "gettitlelist" {
+                set_ [cjoin $tignores "join.ignores"]
+
+                if {[string length $_] > 225} {
+                    session set CmdReplyParam [list "-private" "-multi" "-multi-max" "-1" "-return"]
+                }
+                reply $_
+            }
     	}
     	unset _ i
-	}
-	return
+    }
+
+    return
 }
 
 proc ::gettitle::get_title {data} {
@@ -355,6 +347,28 @@ proc ::gettitle::get_title {data} {
     }
 
     unset data
+
+    return $ret
+}
+
+proc ::gettitle::get_cp {data metacp} {
+    if {![regexp -nocase -- {<meta[^>]+charset\s*=\s*([^\s\"\'>]+).*?>} $data -> cp] \
+            && ![regexp -nocase -- {<?xml\s+version[^>]+encoding="([^\s\'\/\>]+)"} $data -> cp]} {
+        set cp $metacp
+        debug -debug- "set cp \$metacp"
+    }
+
+    debug -debug- "MetaCp: $metacp"
+    debug -debug- "rawcp: $cp"
+
+    set ret [::ck::http::charset2encoding $cp]
+
+    if {$ret eq "binary"} {
+#        set ret "cp1251"
+        set ret $::ck::ircencoding
+    }
+
+    debug -debug- "ret: $ret"
 
     return $ret
 }
