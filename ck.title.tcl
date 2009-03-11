@@ -211,6 +211,7 @@ proc ::gettitle::run { sid } {
     if { $Mark eq "Get" } {
         if { $HttpStatus < 0 } {
             debug -err "Ошибка запроса '%s'." $HttpError
+            if {$CmdEventMark eq ""} { reply -err "Ошибка запроса: '%s'." $HttpError }
             return
         }
 
@@ -227,7 +228,7 @@ proc ::gettitle::run { sid } {
 
             set title [get_title $HttpData]
 
-            debug -debug "rawtitle: $title"
+            debug -debug- "rawtitle: $title"
 
             set cp [get_cp $HttpData $HttpMetaCharset]
 
@@ -238,7 +239,7 @@ proc ::gettitle::run { sid } {
             set maxlen [config get maxlen]
 
             if {$title ne ""} {
-            	debug -debug "title: $title"
+            	debug -debug- "title: $title"
 
                 if {[string length $title] > ${maxlen}} {
                     set title [string trimright [string range $title 0 [expr ${maxlen}-3]] [list "." " " "," ":" ";" "¤" "-"]]
@@ -246,12 +247,16 @@ proc ::gettitle::run { sid } {
                 }
 
                 reply -noperson -uniq main $title
+            } else {
+                debug -debug "\$title is empty"
+                if {$CmdEventMark eq ""} { reply -err "ошибка: пустой заголовок"}
             }
 
             unset maxlen cp title
 
         } else {
             debug -debug "Unknown \"Content-Type\""
+            if {$CmdEventMark eq ""} { reply -err "ошибка: неизвестный \"Content-Type\""}
         }
 
         unset tmp
