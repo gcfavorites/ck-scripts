@@ -226,13 +226,7 @@ proc ::gettitle::run { sid } {
         if {[info exists tmp(Content-Type)] \
                 && ([lsearch $alltypes [lindex [split $tmp(Content-Type) ";"] 0]] != -1)} {
 
-            set title [get_title $HttpData]
-
-            debug -debug- "rawtitle: $title"
-
-            set cp [get_cp $HttpData $HttpMetaCharset]
-
-            set title [encoding convertfrom $cp $title]
+            set title [get_title $HttpData $HttpMetaCharset]
 
             set title [string stripspace [html unspec [html untag $title]]]
 
@@ -252,7 +246,7 @@ proc ::gettitle::run { sid } {
                 if {$CmdEventMark eq ""} { reply -err "ошибка: пустой заголовок"}
             }
 
-            unset maxlen cp title
+            unset maxlen title
 
         } else {
             debug -debug "Unknown \"Content-Type\""
@@ -339,29 +333,13 @@ proc ::gettitle::ignore { sid } {
     return
 }
 
-proc ::gettitle::get_title {data} {
-    if {![regexp -nocase -- {<title>(.*?)</title>} $data -> title] \
-            && ![regexp -nocase -- {<meta[^>]+name="title"[^>]+content="([^\"]+)"} $data -> title] \
-            && ![regexp -nocase -- {<card[^>]+title="([^\"]+)"} $data -> title]} {
-        debug -err "Title not found"
-        set ret ""
-    } else {
-        debug -debug "rawtitle: \"$title\""
-        set ret $title
-        unset -> title
-    }
-
-    unset data
-
-    return $ret
-}
-
 proc ::gettitle::get_cp {data metacp} {
     if {![regexp -nocase -- {<meta[^>]+charset\s*=\s*([^\s\"\'>]+).*?>} $data -> cp] \
             && ![regexp -nocase -- {<?xml\s+version[^>]+encoding="([^\s\'\/\>]+)"} $data -> cp]} {
+
         set cp $metacp
         debug -debug- "set cp \$metacp"
-    }
+    } else {unset ->}
 
     debug -debug- "MetaCp: $metacp"
     debug -debug- "rawcp: $cp"
@@ -374,6 +352,44 @@ proc ::gettitle::get_cp {data metacp} {
     }
 
     debug -debug- "ret: $ret"
+
+    unset data metacp cp
+
+    return $ret
+}
+
+proc ::gettitle::get_title {data metacp} {
+
+    set ret ""
+
+    if {![regexp -nocase -- {<title>(.*?)</title>} $data -> title] \
+            && ![regexp -nocase -- {<meta[^>]+name="title"[^>]+content="([^\"]+)"} $data -> title] \
+            && ![regexp -nocase -- {<card[^>]+title="([^\"]+)"} $data -> title]} {
+        debug -err "Title not found"
+    } else {
+        debug -debug "rawtitle: \"$title\""
+
+        set cp [get_cp $data $metacp]
+
+#++ Попытка выправить кодировку
+    debug -debug "String in the detected cp: '%s'" [encoding convertfrom $cp $title]
+    debug -debug- "Trying to verify the codepage"
+    regsub -all -- {[^а-яА-ЯёЁ]} [encoding convertfrom $cp $title] "" cyrtitle
+    debug -debug- "Cyrillic part of the line: %s" $cyrtitle
+
+    if {($cp eq "cp1251") && ([set cyrtitle [string range $cyrtitle 0 4]] ne "") \
+            && ($cyrtitle eq "[string tolower [string index $cyrtitle 0]][string toupper [string range $cyrtitle 1 end]]")} {
+        debug -debug "Возможно неправильное определение кодировки (%s), пробуем %s" $cp "koi8-r"
+        set cp "koi8-r"
+    }
+#--
+
+        set ret [encoding convertfrom $cp $title]
+
+        unset -> title
+    }
+
+    unset data
 
     return $ret
 }
