@@ -8,12 +8,18 @@ namespace eval ::gettitle {
     variable version 0.3
     variable author  "kns @ RusNet"
 
+
+# префиксы команд, сообщения с ними орабатываться не будут
     variable denpr      [list "!" "\$" "%" "&" "." "-" "@" "*" "+" "~" "`" "\?"]
 
+
+# разрешенные Content-Type. маски не поддерживаются
     variable alltypes   [list "text/html" "text/wml" "text/vnd.wap.wml" \
                           "text/xml" "application/xml" "application/rss+xml" \
                         ]
 
+
+# переменная, в которой будут храниться игноры
     variable tignores [list]
 
     namespace import -force ::ck::cmd::*
@@ -25,6 +31,7 @@ namespace eval ::gettitle {
 proc ::gettitle::init {  } {
     variable tignores
 
+# регистрируем новый datafile для списка игноров
     datafile register tignores -net -bot
 
 
@@ -219,12 +226,13 @@ proc ::gettitle::run { sid } {
 
         variable alltypes
 
-        array set tmp $HttpMeta
+#        if {[info exists HttpMetaType]} {
+#            set ContentType [string trim [string tolower HttpMetaType]]
+#        } else {
+#            set ContentType ""
+#        }
 
-## Убрал кошерный in для совместимости с древним тиклем :'(
-
-        if {[info exists tmp(Content-Type)] \
-                && ([lsearch $alltypes [lindex [split $tmp(Content-Type) ";"] 0]] != -1)} {
+        if {([lsearch $alltypes $HttpMetaType] != -1)} {
 
             set title [get_title $HttpData $HttpMetaCharset]
 
@@ -249,11 +257,9 @@ proc ::gettitle::run { sid } {
             unset maxlen title
 
         } else {
-            debug -debug "Unknown \"Content-Type\""
+            debug -debug "Unknown 'Content-Type': '%s'" $HttpMetaType
             if {$CmdEventMark eq ""} { reply -err "ошибка: неизвестный \"Content-Type\""}
         }
-
-        unset tmp
     }
 
     return
