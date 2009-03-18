@@ -47,53 +47,54 @@ proc ::pubtcl::run { sid } {
         session set CmdAccess [config get "access.add"]
         checkaccess -return
 
-        set stim [expr {$CmdId eq "pubtcltim"}]
-
-        set ustr [join [lrange $StdArgs 1 end]]
-
-        set tim [time {set ret [catch {eval $ustr} result]}]
-        set tim [expr {[lindex [split $tim] 0] / 1000.0}]
-
-        if {$result eq ""} {
-            reply "<no error>"
-        } else {
-            set tmp [split $result \n]
-            set ltmp [llength $tmp]
-
-            set maxlines [config get "maxlines"]
-            set privlines [config get "privlines"]
-
-            if {[expr {$ltmp > ($maxlines + 1)}]} {
-                reply big $ltmp
-                set tmp [list]
-                set stim 0
-            } elseif {[expr {$ltmp > ($privlines + 1)}]} {
-                session set CmdReplyParam [list "-noperson" "-private"]
-                session set CmdEvent "msg"
-            } elseif {[expr {$ltmp == 1}]} {
-                set tmp [lreplace $tmp 0 0 [cformat rtd $result [conv $ret] $tim]]
-                set stim 0
-            } else {
-                session set CmdReplyParam [list "-noperson"]
-            }
-
-            set ssline ""
-            foreach sline $tmp {
-                if {([string length [string trim $sline]] > 0) \
-                        && ($sline ne $ssline)} {
-                    reply $sline
-                    set ssline $sline
-                }
-            }
-
-            if {$stim} {
-                reply [cformat rt $ret $tim]
-            }
-
-            unset tmp ltmp result ssline stim maxlines privlines
+        if {![catch {info args ::time}]} {
+            debug -err "Bad 'time' proc. See http://www.winegg.net/index.php?topic=441.msg1819#msg1819 for more inf."
+            return
         }
 
-        unset ret tim ustr
+        set ustr [join [lrange $StdArgs 1 end]]
+        set RetTime [time {set RetCode [catch {eval $ustr} Result]}]
+        set RetTime [expr {[lindex [split $RetTime] 0] / 1000.0}]
+        unset ustr
+
+        if {$Result eq ""} { set Result "<no error>" }
+
+        set Result [split $Result \n]
+        set ResLen [llength $Result]
+        set RetCode [conv $RetCode]
+
+        set MaxLines [expr {[config get "maxlines"] + 1}]
+        set PrivLines [expr {[config get "privlines"] + 1}]
+
+        session set CmdReplyParam [list "-noperson"]
+
+        if {$ResLen eq 1} {
+#            всего одна строчка
+            session set CmdReplyParam [list "-multi"]
+            reply rtd [join $Result] $RetCode $RetTime
+            return
+        } elseif {$ResLen > $MaxLines} {
+#            слишком много строк на выходе. позже приделаю -force
+            reply big $ResLen
+            return
+        } elseif {($ResLen >= $PrivLines) && ($ResLen <= $MaxLines)} {
+#            выводим в приват
+            session set CmdEvent "msg"
+        }
+
+        if {$CmdId eq "pubtcltim"} {
+#            добавляем строчку с информацией
+            lappend Result $RetCode [cformat rt $ResTime]
+        }
+
+        set bLine ""
+        foreach_ $Result {
+            if {([string length [string trim $_]] > 0) \
+                    && ($_ ne $bLine)} {
+                reply $_
+                set bLine $_
+            }
+        }
     }
 
     return
