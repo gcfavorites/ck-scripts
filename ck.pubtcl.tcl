@@ -84,7 +84,7 @@ proc ::pubtcl::run { sid } {
 
         if {$CmdId eq "pubtcltim"} {
 #            добавляем строчку с информацией
-            lappend Result $RetCode [cformat rt $ResTime]
+            lappend Result $RetCode [cformat rt $RetTime]
         }
 
         set bLine ""
