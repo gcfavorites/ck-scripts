@@ -15,7 +15,7 @@ namespace eval httputils {
 proc ::httputils::init {} {
 
   cmd register httphead ::httputils::httphead \
-    -bind "http" -bind "server" -bind "сервер" -autousage -doc "http"
+    -bind "http" -force-prefix -bind "server" -bind "сервер" -autousage -doc "http"
 
   cmd doc "http" {~*!http* <url>~ - получить информацию об URL.}
 
