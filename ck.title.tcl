@@ -156,7 +156,7 @@ proc ::gettitle::filter { } {
 
     if {([lsearch $denpr [string index $Text 0]] == -1) \
             && ![llength $binds] \
-            && ([string match -nocase {*[a-z]*} $ign] \
+            && ([string match {*[a-zA-Z]*} $ign] \
                     && ![matchattr $Handle $ign $Channel]) \
             && ([set url [seturl $Text]] ne "")} {
 
@@ -189,7 +189,7 @@ proc ::gettitle::run { sid } {
         if {$CmdEventMark eq "FilterMark" && [llength $tignores]} {
 
             regexp -- {^(?:https?://)?(?:w(?:ap|ww)\.)?([^/\?:]+)} $url -> dom
-            debug "Домен: $dom"
+#            debug "Домен: $dom"
 
 
             set i ""
