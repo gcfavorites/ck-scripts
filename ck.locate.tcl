@@ -156,16 +156,19 @@ proc ::locate::got_dns { sid } {
   }
 
   if {$CmdId eq "locatedns"} {
-    reply -return dns $LocHost $LocIP
+    if {$LocHost eq $LocIP} {
+      reply -err resolve $LocHost
+    } else {
+      reply -return dns $LocHost $LocIP
+    }
   }
 
   checkloc $LocIP
 
-# switch - на будущее
-
-  switch -exact $CmdId {
-    locateping {session event MakePing}
-    default {session event MakeWhois}
+  if {$CmdId eq "locateping"} {
+    session event MakePing
+  } else {
+    session event MakeWhois
   }
 }
 
@@ -189,6 +192,8 @@ proc ::locate::got_ping { sid } {
   set PingData [string stripspace $PingData]
 
   debug -debug $PingData
+
+# rewrite!
 
   if {[regexp -- {(\d+)\s(?:packets\s)?received,\s(\d+)%\spacket\s.*?([0-9\.]+)\sms[\w,\s]*$} $PingData -> p1 p2 p3]} {
     if { $LocHost == "" || $LocHost == $LocIP } {

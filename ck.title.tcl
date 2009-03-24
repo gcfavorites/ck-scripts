@@ -97,17 +97,20 @@ proc ::gettitle::init {  } {
     msgreg {
         err.badurl      эта строка не похожа на ссылку
 
-        main            &L&ptitle&L&n: &K<&B%s&K>&n
+        main.inf        "&L&ptitle&L%s&n: %s"
+        main.time       &K(&g%s ms&K)
+        main.url        &K<&B%s&K>&n
 
-        exists          домен или шаблон &K<&R%s&K>&n уже в списке игнорирования &K(&g%s&K)&n
-        notexists       домен или шаблон &K<&R%s&K>&n не найден в списке игнорирования
+        exists          &K<&R%s&K>&n уже в списке игнорирования &K(&g%s&K)&n
+        notexists       &K<&R%s&K>&n не найден в списке игнорирования
 
-        add             домен или шаблон &K<&R%s&K>&n добавлен в список игнорирования
-        del             домен или шаблон &K<&R%s&K>&n удален из списка игнорирования
+        add             &K<&R%s&K>&n добавлен в список игнорирования
+        del             &K<&R%s&K>&n удален из списка игнорирования
 
-        found           домен или шаблон &K<&R%s&K>&n найден списке игнорирования &K(&g%s&K)&n
-        notfound        домен или шаблон &K<&R%s&K>&n не найден списке игнорирования
+        found           &K<&R%s&K>&n найден в списке игнорирования &K(&g%s&K)&n
+        notfound        &K<&R%s&K>&n не найден в списке игнорирования
 
+        ignores         список игнорования: &R%s&n.
         join.ignores    "&K,&R "
     }
 }
@@ -177,15 +180,16 @@ proc ::gettitle::run { sid } {
         set url [lindex [split [lindex $StdArgs 1] "#"] 0]
 
         if {[string first "." $url] < 1 || [string length $url] < 4} {
-            reply -err badurl
+            if {$CmdEventMark eq ""} { reply -err badurl }
             return
         }
 
-        if {$CmdEventMark eq "FilterMark"} {
-            variable tignores
+        variable tignores
 
-            regexp -- {^(?:https?://)?(?:www\.)?([^/\?]+)} $url -> dom
-#            debug "Домен: $dom"
+        if {$CmdEventMark eq "FilterMark" && [llength $tignores]} {
+
+            regexp -- {^(?:https?://)?(?:w(?:ap|ww)\.)?([^/\?:]+)} $url -> dom
+            debug "Домен: $dom"
 
 
             set i ""
@@ -204,6 +208,8 @@ proc ::gettitle::run { sid } {
             unset _ i dom
         }
 
+        session set StartGet [clock clicks]
+
         http run $url \
             -mark "Get" \
             -norecode \
@@ -216,6 +222,9 @@ proc ::gettitle::run { sid } {
     }
 
     if { $Mark eq "Get" } {
+        session set EndGet [clock clicks]
+        session import StartGet
+
         if { $HttpStatus < 0 } {
             debug -err "Ошибка запроса '%s'." $HttpError
             if {$CmdEventMark eq ""} { reply -err "Ошибка запроса: '%s'." $HttpError }
@@ -225,12 +234,6 @@ proc ::gettitle::run { sid } {
 #		debug $HttpUrl
 
         variable alltypes
-
-#        if {[info exists HttpMetaType]} {
-#            set ContentType [string trim [string tolower HttpMetaType]]
-#        } else {
-#            set ContentType ""
-#        }
 
         if {([lsearch $alltypes $HttpMetaType] != -1)} {
 
@@ -248,7 +251,7 @@ proc ::gettitle::run { sid } {
                     append title "..."
                 }
 
-                reply -noperson -uniq main $title
+                reply -noperson -uniq "main.inf" "" [cformat "main.url" $title]
             } else {
                 debug -debug "\$title is empty"
                 if {$CmdEventMark eq ""} { reply -err "ошибка: пустой заголовок"}
@@ -258,7 +261,7 @@ proc ::gettitle::run { sid } {
 
         } else {
             debug -debug "Unknown 'Content-Type': '%s'" $HttpMetaType
-            if {$CmdEventMark eq ""} { reply -err "ошибка: неизвестный \"Content-Type\""}
+            if {$CmdEventMark eq ""} { reply -err "ошибка: тип '%s' отсутствует в списке разрешенных" $HttpMetaType}
         }
     }
 
@@ -318,19 +321,23 @@ proc ::gettitle::ignore { sid } {
 
             "gettitlesearch" {
     		if {$i eq ""} {
-                    reply found $Text $i
-    		} else {
                     reply notfound $Text
+    		} else {
+                    reply found $Text $i
     		}
             }
 
             "gettitlelist" {
-                set_ [cjoin $tignores "join.ignores"]
+                if {![llength $tignores]} {
+                    set_ "пуст"
+                } else {
+                    set_ [cjoin $tignores "join.ignores"]
+                }
 
                 if {[string length $_] > 225} {
                     session set CmdReplyParam [list "-private" "-multi" "-multi-max" "-1" "-return"]
                 }
-                reply $_
+                reply ignores $_
             }
     	}
     	unset _ i
