@@ -125,16 +125,17 @@ proc ::soft::run { sid } {
         append reg {\s*(?:<img[^<]+>)?\s*?(?:\s<font class="[^\"]+"><i>[^<]+</i></font>)?(?:<span class="smark">[^<]+</span>)?}; # awards (probably too much expressions)
         append reg {\s*<br />([^<]+)<br />}; #description
         append reg {<span class="date"><span style="color: #fe7e02;">&raquo;</span>}; # arrow
-        append reg {\s*<a href="[^\"]+">([^<]+)</a>}; # category
-        append reg {\s-\s(\S+)}; # date
-        append reg {\s-\s*(\S+\s\S+|n/a|\s)}; # size
-        append reg {\s*-\s(\S+)}; # OS
-        append reg {[^:]+:\s(\S+)}; # rus. tr.
-        append reg {\s-\s<a[^>]+>([^<]+</a>[^<]*)</span>}; # status
+        append reg {\s*<a href="[^\"]+">([^<]+)</a>\s}; # category
+        append reg {-\s<a href="[^\"]+">([^<]+)</a>\s}; # subcategory
+        append reg {-\s(\S+)\s}; # date
+        append reg {-\s*(\S+\s\S+|n/a|\s)\s*}; # size
+        append reg {-\s(\S+)}; # OS
+        append reg {[^:]+:\s(\S+)\s}; # rus. tr.
+        append reg {-\s<a[^>]+>([^<]+</a>[^<]*)</span>}; # status
         append reg {<br /><hr[^>]+></div>}; # end
 
-        # full regexp (29.03.2009)
-        ## set reg {<div class="prgentry"><a class="subheader" href="([^\"]+)">([^<]+)</a>\s*(?:<img[^<]+>)?\s*?(?:\s<font class="[^\"]+"><i>[^<]+</i></font>)?(?:<span class="smark">[^<]+</span>)?\s*<br />([^<]+)<br /><span class="date"><span style="color: #fe7e02;">&raquo;</span>\s*<a href="[^\"]+">([^<]+)</a>\s-\s(\S+)\s-\s*(\S+\s\S+|n/a|\s)\s*-\s(\S+)[^:]+:\s(\S+)\s-\s<a[^>]+>([^<]+</a>[^<]*)</span><br /><hr[^>]+></div>}
+        # full regexp (05.04.2009)
+        ## set reg {<div class="prgentry"><a class="subheader" href="([^\"]+)">([^<]+)</a>\s*(?:<img[^<]+>)?\s*?(?:\s<font class="[^\"]+"><i>[^<]+</i></font>)?(?:<span class="smark">[^<]+</span>)?\s*<br />([^<]+)<br /><span class="date"><span style="color: #fe7e02;">&raquo;</span>\s*<a href="[^\"]+">([^<]+)</a>\s-\s<a href="[^\"]+">([^<]+)</a>\s-\s(\S+)\s-\s*(\S+\s\S+|n/a|\s)\s*-\s(\S+)[^:]+:\s(\S+)\s-\s<a[^>]+>([^<]+</a>[^<]*)</span><br /><hr[^>]+></div>}
         #
 #-- regexp
 
@@ -145,11 +146,11 @@ proc ::soft::run { sid } {
         if {[set len [expr {[llength $HttpData] / 10 }]]} {
             set list [list]
 
-            foreach {-> url name descr section date size os rus type} $HttpData {
+            foreach {-> url name descr section subcat date size os rus type} $HttpData {
                 lappend list    [list \
-                                "name" $name "descr" $descr "section" $section \
-                                "date" $date "size" $size "os" $os \
-                                "rus" $rus "type" $type "url" $url \
+                                    "name" $name "descr" $descr "section" $section \
+                                    "date" $date "size" $size "os" $os \
+                                    "rus" $rus "type" $type "url" $url \
                                 ]
             }
 
