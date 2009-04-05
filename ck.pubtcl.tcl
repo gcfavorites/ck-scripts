@@ -8,8 +8,6 @@ namespace eval ::pubtcl {
 
 
     namespace import -force ::ck::cmd::*
-    namespace import -force ::ck::strings::html
-
 }
 
 proc ::pubtcl::init {  } {
