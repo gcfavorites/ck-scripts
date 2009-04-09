@@ -290,11 +290,11 @@ proc ::gettitle::run { sid } {
 
                 lappend_ [cformat "size.bytes" $HttpMetaLength B]
 
-                if {[set ksize [expr {$HttpMetaLength / 1024.0}]] > 0} {
+                if {[set ksize [expr {$HttpMetaLength / 1024.0}]] >= 1} {
                     lappend_ [cformat "size.kbytes" [format "%0.1f" $ksize] kB]
                 }
 
-                if {[set msize [expr {$HttpMetaLength / 1048576.0}]] > 0} {
+                if {[set msize [expr {$HttpMetaLength / 1048576.0}]] >= 1} {
                     lappend_ [cformat "size.mbytes" [format "%0.2f" $msize] MB]
                 }
 
