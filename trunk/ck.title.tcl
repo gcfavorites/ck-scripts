@@ -5,7 +5,7 @@ encoding system utf-8
 ::ck::require strings
 
 namespace eval ::gettitle {
-    variable version 0.3
+    variable version 0.4
     variable author  "kns @ RusNet"
 
 
@@ -13,7 +13,7 @@ namespace eval ::gettitle {
     variable denpr      [list "!" "\$" "%" "&" "." "-" "@" "*" "+" "~" "`" "\?"]
 
 
-# разрешенные Content-Type. маски не поддерживаются
+# разрешенные Content-Type. маски не поддерживаются (а, может быть, поддерживаются :)))
     variable alltypes   [list "text/html" "text/wml" "text/vnd.wap.wml" \
                           "text/xml" "application/xml" "application/rss+xml" \
                         ]
@@ -35,7 +35,7 @@ proc ::gettitle::init {  } {
     datafile register tignores -net -bot
 
 
-
+#++ cmds
     cmd register gettitle [namespace current]::run -doc "gettitle" -autousage \
         -bindpub "title" -bindpub "gettitle"
 
@@ -45,23 +45,23 @@ proc ::gettitle::init {  } {
     cmd register gettitleunignore [namespace current]::ignore -doc "gettitle.unignore" -autousage \
         -bindpub "tunignore" -config "gettitle" -access "m"
 
-	cmd register gettitlesearch [namespace current]::ignore -doc "gettitle.search" -autousage \
+    cmd register gettitlesearch [namespace current]::ignore -doc "gettitle.search" -autousage \
         -bindpub "tsearch" -config "gettitle" -access "m"
 
-	cmd register gettitlelist [namespace current]::ignore -doc "gettitle.list" \
+    cmd register gettitlelist [namespace current]::ignore -doc "gettitle.list" \
         -bindpub "tlist" -config "gettitle" -access "m"
 
 
     cmd regfilter gettitle [namespace current]::filter -cmd "gettitle" \
         -pub -prio 100
+#-- cmds
 
-
-
+#++ docs
     cmd doc -link [list "gettitle.ignore" "gettitle.unignore" "gettitle.search" "gettitle.list"] \
-    	"gettitle" {~*!title* <url>~ - получение заголовка странички.}
+        "gettitle" {~*!title* <url>~ - получение заголовка странички.}
 
     cmd doc -link [list "gettitle" "gettitle.unignore" "gettitle.search" "gettitle.list"] \
-    	"gettitle.ignore" {~*!tignore* <url>~ - добавить сайт в список игнорируемых (можно использовать маски).}
+        "gettitle.ignore" {~*!tignore* <url>~ - добавить сайт в список игнорируемых (можно использовать маски).}
 
     cmd doc -link [list "gettitle" "gettitle.ignore" "gettitle.search" "gettitle.list"] \
         "gettitle.unignore" {~*!tunignore* <url>~ - удалить сайт из списка игнорируемых (можно использовать маски).}
@@ -71,10 +71,10 @@ proc ::gettitle::init {  } {
 
     cmd doc -link [list "gettitle" "gettitle.ignore" "gettitle.unignore" "gettitle.search"] \
          "gettitle.list" {~*!tlist*~ - показать список игноров.}
+#-- docs
 
-
-
-    config register -id "auto" -type int -default 1 \
+#++ configs
+    config register -id "auto" -type bool -default 1 \
         -desc "Автоматически выхватывать ссылки из сообщений на каналах" -access "n" -folder "gettitle"
 
     config register -id "forceonchans" -type list -default [list] \
@@ -90,6 +90,12 @@ proc ::gettitle::init {  } {
     config register -id "readlimit" -type int -default 11264 \
         -desc "Максимальное число загружаемых байтов" -access "n" -folder "gettitle"
 
+    config register -id "showsize" -type bool -default 0 \
+        -desc "Показывать размер файла (пока сделано только для изображений)" -access "n" -folder "gettitle"
+
+    config register -id "showspeed" -type bool -default 0 \
+        -desc "Показывать скорость получения ссылки" -access "n" -folder "gettitle"
+#-- configs
 
 
     set tignores [datafile getlist tignores]
@@ -97,9 +103,14 @@ proc ::gettitle::init {  } {
     msgreg {
         err.badurl      эта строка не похожа на ссылку
 
-        main.inf        "&L&ptitle&L%s&n: %s"
-        main.time       &K(&g%s ms&K)
+        main.inf        &L&pURL title&L%s&n: %s
+        main.time       " &K(&g%s %s&K)"
         main.url        &K<&B%s&K>&n
+        main.size       &L&p%s&L%s&n. Size: %s.
+
+        size.bytes      &g%s&n %s
+        size.kbytes     &r%s&n %s
+        size.mbytes     &R%s&n %s
 
         exists          &K<&R%s&K>&n уже в списке игнорирования &K(&g%s&K)&n
         notexists       &K<&R%s&K>&n не найден в списке игнорирования
@@ -112,6 +123,7 @@ proc ::gettitle::init {  } {
 
         ignores         список игнорования: &R%s&n.
         join.ignores    "&K,&R "
+        join.size       " &K::&R "
     }
 }
 
@@ -177,7 +189,7 @@ proc ::gettitle::run { sid } {
     session import
 
     if { $Event eq "CmdPass"  } {
-        set url [lindex [split [lindex $StdArgs 1] "#"] 0]
+        set url [lindex $StdArgs 1]
 
         if {[string first "." $url] < 1 || [string length $url] < 4} {
             if {$CmdEventMark eq ""} { reply -err badurl }
@@ -197,9 +209,9 @@ proc ::gettitle::run { sid } {
             foreach_ $tignores {
                 if {[string match -nocase $_ $dom]} {
                     set i $_
-    		    break
+                    break
                 }
-    	    }
+            }
 
             if {$i ne ""} {
                 debug -err [regsub -all -- {\&[a-zA-Z]} [::ck::cmd::stripMAGIC [cformat found $dom $i]] ""]
@@ -208,7 +220,7 @@ proc ::gettitle::run { sid } {
             unset _ i dom
         }
 
-        session set StartGet [clock clicks]
+        session set StartGet [clock clicks]; # пускаем счетчик
 
         http run $url \
             -mark "Get" \
@@ -222,7 +234,7 @@ proc ::gettitle::run { sid } {
     }
 
     if { $Mark eq "Get" } {
-        session set EndGet [clock clicks]
+        set GetTime [clock clicks]; # замеряем время получения
         session import StartGet
 
         if { $HttpStatus < 0 } {
@@ -231,7 +243,9 @@ proc ::gettitle::run { sid } {
             return
         }
 
-#		debug $HttpUrl
+#        debug -debug "GetTime: %0.3f ms" [expr {($GetTime - $StartGet) / 1000.0}]
+
+#        debug $HttpUrl
 
         variable alltypes
 
@@ -244,21 +258,57 @@ proc ::gettitle::run { sid } {
             set maxlen [config get maxlen]
 
             if {$title ne ""} {
-            	debug -debug- "title: $title"
+                debug -debug- "title: $title"
 
                 if {[string length $title] > ${maxlen}} {
                     set title [string trimright [string range $title 0 [expr ${maxlen}-3]] [list "." " " "," ":" ";" "¤" "-"]]
                     append title "..."
                 }
 
-                reply -noperson -uniq "main.inf" "" [cformat "main.url" $title]
+                set EndGet [clock clicks]; # останавливаем счетчик
+                if {[config get showspeed]} {
+                    set GTime [cformat "main.time" [expr {($EndGet - $StartGet) / 1000}] ms]
+                } else {
+                    set GTime ""
+                }
+
+                reply -noperson -uniq "main.inf" $GTime [cformat "main.url" $title]
             } else {
-                debug -debug "\$title is empty"
+                debug -debug "Title is empty"
                 if {$CmdEventMark eq ""} { reply -err "ошибка: пустой заголовок"}
             }
 
             unset maxlen title
 
+        } elseif {[config get showsize] && [string match -nocase "image/*" $HttpMetaType]} {
+            debug -debug "Trying to get file size"
+
+            if {[string is digit $HttpMetaLength] && ($HttpMetaLength > 0)} {
+#                debug -debug "Original size: %s" $HttpMetaLength
+
+                set_ [list]
+
+                lappend_ [cformat "size.bytes" $HttpMetaLength B]
+
+                if {[set ksize [expr {$HttpMetaLength / 1024.0}]] > 0} {
+                    lappend_ [cformat "size.kbytes" [format "%0.1f" $ksize] kB]
+                }
+
+                if {[set msize [expr {$HttpMetaLength / 1048576.0}]] > 0} {
+                    lappend_ [cformat "size.mbytes" [format "%0.2f" $msize] MB]
+                }
+
+                set EndGet [clock clicks]
+                if {[config get showspeed]} {
+                    set GTime [cformat "main.time" [expr {($EndGet - $StartGet) / 1000}] ms]
+                } else {
+                    set GTime ""
+                }
+
+                reply -noperson -uniq "main.size" "Image" $GTime [cjoin $_ "join.size"]
+
+                unset ksize msize GTime _
+            }
         } else {
             debug -debug "Unknown 'Content-Type': '%s'" $HttpMetaType
             if {$CmdEventMark eq ""} { reply -err "ошибка: тип '%s' отсутствует в списке разрешенных" $HttpMetaType}
@@ -360,8 +410,8 @@ proc ::gettitle::get_cp {data metacp} {
     set ret [::ck::http::charset2encoding $cp]
 
     if {$ret eq "binary"} {
-#        set ret "cp1251"
-        set ret $::ck::ircencoding
+        set ret "cp1251"
+#        set ret $::ck::ircencoding
     }
 
     debug -debug- "ret: $ret"
@@ -385,16 +435,16 @@ proc ::gettitle::get_title {data metacp} {
         set cp [get_cp $data $metacp]
 
 #++ Попытка выправить кодировку
-    debug -debug "String in the detected cp: '%s'" [encoding convertfrom $cp $title]
-    debug -debug- "Trying to verify the codepage"
-    regsub -all -- {[^а-яА-ЯёЁ]} [encoding convertfrom $cp $title] "" cyrtitle
-    debug -debug- "Cyrillic part of the line: %s" $cyrtitle
+        debug -debug "String in the detected cp: '%s'" [encoding convertfrom $cp $title]
+        debug -debug- "Trying to verify the codepage"
+        regsub -all -- {[^а-яА-ЯёЁ]} [encoding convertfrom $cp $title] "" cyrtitle
+        debug -debug- "Cyrillic part of the line: %s" $cyrtitle
 
-    if {($cp eq "cp1251") && ([set cyrtitle [string range $cyrtitle 0 4]] ne "") \
-            && ($cyrtitle eq "[string tolower [string index $cyrtitle 0]][string toupper [string range $cyrtitle 1 end]]")} {
-        debug -debug "Возможно неправильное определение кодировки (%s), пробуем %s" $cp "koi8-r"
-        set cp "koi8-r"
-    }
+        if {($cp eq "cp1251") && ([string length [set cyrtitle [string range $cyrtitle 0 4]]] > 4) \
+                && ($cyrtitle eq "[string tolower [string index $cyrtitle 0]][string toupper [string range $cyrtitle 1 end]]")} {
+            debug -debug "Возможно неправильное определение кодировки (%s), пробуем %s" $cp "koi8-r"
+            set cp "koi8-r"
+        }
 #--
 
         set ret [encoding convertfrom $cp $title]
