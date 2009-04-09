@@ -280,8 +280,24 @@ proc ::gettitle::run { sid } {
 
             unset maxlen title
 
-        } elseif {[config get showsize] && [string match -nocase "image/*" $HttpMetaType]} {
+        } elseif {[config get showsize]} {
             debug -debug "Trying to get file size"
+
+            switch -glob -- [string tolower $HttpMetaType] {
+                "image/*" {set type "Image"}
+                "audio/*" {set type "Audio"}
+                "video/*" {set type "Video"}
+                "application/*zip*"         -
+                "application/*compress*"    -
+                "application/*tar*"         -
+                "application/*rar*"         {set type "Archive"}
+                "application/*program*"     {set type "Program"}
+                default {
+                    debug -debug "Unknown 'Content-Type': '%s'" $HttpMetaType
+                    if {$CmdEventMark eq ""} { reply -err "ошибка: тип '%s' отсутствует в списке разрешенных" $HttpMetaType}
+                    return 1
+                }
+            }
 
             if {[string is digit $HttpMetaLength] && ($HttpMetaLength > 0)} {
 #                debug -debug "Original size: %s" $HttpMetaLength
@@ -305,7 +321,7 @@ proc ::gettitle::run { sid } {
                     set GTime ""
                 }
 
-                reply -noperson -uniq "main.size" "Image" $GTime [cjoin $_ "join.size"]
+                reply -noperson -uniq "main.size" $type $GTime [cjoin $_ "join.size"]
 
                 unset ksize msize GTime _
             }
