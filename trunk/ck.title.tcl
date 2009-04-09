@@ -103,10 +103,10 @@ proc ::gettitle::init {  } {
     msgreg {
         err.badurl      эта строка не похожа на ссылку
 
-        main.inf        &L&pURL title&L%s&n: %s
+        main.inf        &L&p%s&L%s&n: %s
         main.time       " &K(&g%s %s&K)"
         main.url        &K<&B%s&K>&n
-        main.size       &L&p%s&L%s&n. Size: %s.
+        main.size       Size - %s.
 
         size.bytes      &g%s&n %s
         size.kbytes     &r%s&n %s
@@ -272,7 +272,7 @@ proc ::gettitle::run { sid } {
                     set GTime ""
                 }
 
-                reply -noperson -uniq "main.inf" $GTime [cformat "main.url" $title]
+                reply -noperson -uniq "main.inf" "URL title" $GTime [cformat "main.url" $title]
             } else {
                 debug -debug "Title is empty"
                 if {$CmdEventMark eq ""} { reply -err "ошибка: пустой заголовок"}
@@ -280,16 +280,16 @@ proc ::gettitle::run { sid } {
 
             unset maxlen title
 
-        } elseif {[config get showsize]} {
+        } elseif {[config get showsize] || ($CmdEventMark eq "")} {
             debug -debug "Trying to get file size"
 
             switch -glob -- [string tolower $HttpMetaType] {
-                "image/*" {set type "Image"}
-                "audio/*" {set type "Audio"}
-                "video/*" {set type "Video"}
-                "application/*zip*"         -
-                "application/*compress*"    -
-                "application/*tar*"         -
+                "image/*"                   {set type "Image"}
+                "audio/*"                   {set type "Audio"}
+                "video/*"                   {set type "Video"}
+                "application/*zip*"                 -
+                "application/*compress*"            -
+                "application/*tar*"                 -
                 "application/*rar*"         {set type "Archive"}
                 "application/*program*"     {set type "Program"}
                 default {
@@ -321,9 +321,9 @@ proc ::gettitle::run { sid } {
                     set GTime ""
                 }
 
-                reply -noperson -uniq "main.size" $type $GTime [cjoin $_ "join.size"]
+                reply -noperson -uniq "main.inf" $type $GTime [cformat "main.size" [cjoin $_ "join.size"]]
 
-                unset ksize msize GTime _
+                unset ksize msize GTime _ type
             }
         } else {
             debug -debug "Unknown 'Content-Type': '%s'" $HttpMetaType
@@ -338,59 +338,59 @@ proc ::gettitle::ignore { sid } {
     session import
 
     if { $Event eq "CmdPass"  } {
-    	variable tignores
+        variable tignores
 
-    	set Text [lindex $StdArgs 1]
+        set Text [lindex $StdArgs 1]
 
-    	set i ""
-    	set_ ""
+        set i ""
+        set_ ""
 
-    	# юзаем foreach для совместимости
-    	foreach_ $tignores {
+        # юзаем foreach для совместимости
+        foreach_ $tignores {
             if {[string match -nocase $Text $_] \
                     || [string match -nocase $_ $Text]} {
                 set i $_
-    		break
-    	    }
-    	}
+                break
+            }
+        }
 
-	switch -exact -- $CmdId {
+        switch -exact -- $CmdId {
             "gettitleignore" {
                 if {$i eq ""} {
                     lappend tignores $Text
                     datafile putlist tignores $tignores
 
                     reply add $Text
-            	} else {
+                } else {
                     reply exists $Text $i
-		}
+                }
             }
 
             "gettitleunignore" {
-		if {$i eq ""} {
+                if {$i eq ""} {
                     reply notexists $Text
-    		} else {
+                } else {
                     set nignores [list]
                     foreach_ $tignores {
                         if {[string match -nocase $Text $_]} { continue }
 
-                	lappend nignores $_
-	   	    }
+                        lappend nignores $_
+                    }
 
                     set tignores $nignores
                     datafile putlist tignores $tignores
                     reply del $Text
 
                     unset nignores
-		}
-    	    }
+                }
+            }
 
             "gettitlesearch" {
-    		if {$i eq ""} {
+                if {$i eq ""} {
                     reply notfound $Text
-    		} else {
+                } else {
                     reply found $Text $i
-    		}
+                }
             }
 
             "gettitlelist" {
@@ -405,8 +405,8 @@ proc ::gettitle::ignore { sid } {
                 }
                 reply ignores $_
             }
-    	}
-    	unset _ i
+        }
+        unset _ i
     }
 
     return
