@@ -534,7 +534,7 @@ proc ::gettitle::get_url { HttpUrl v } {
     if {[regexp -nocase -- {^https?://} $v]} {
         set HttpMetaLocation $v
     } elseif {[string index $v 0] eq "/"} {
-        regexp -nocase -- {^(https?://[^/\?]+)} $HttpUrl -> url
+        regexp -nocase -- {^((?:https?://)?[^/\?]+)} $HttpUrl -> url
         set HttpMetaLocation "${url}${v}"
     } else {
         set url [join [lrange [split $HttpUrl "/"] 0 end-1] "/"]
@@ -551,8 +551,8 @@ proc ::gettitle::catch_refresh { sid } {
             && [regexp -- {content=[\"\']([0-9\.]+)[\s\;]*(?:url=)?([^\"\']+)?} $meta -> time url]} {
         debug -debug "Time: %s; Url: %s" $time $url
         if {[string is double $time] && ($time < 1)} {
-            debug -debug "New url: %s" [set url [get_url $HttpUrl $url]]
-            return [get_url $HttpUrl $url]
+            debug -debug "New url: %s" [set url [get_url $HttpUrl [html unspec $url]]]
+            return $url
         }
     }
 
