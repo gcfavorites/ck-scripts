@@ -5,7 +5,7 @@ encoding system utf-8
 ::ck::require strings
 
 namespace eval ::gettitle {
-    variable version 0.4
+    variable version 0.5
     variable author  "kns @ RusNet"
 
 
@@ -87,8 +87,17 @@ proc ::gettitle::init {  } {
     config register -id "maxlen" -type int -default 200 \
         -desc "Максимальная длина выводимого заголовка" -access "n" -folder "gettitle"
 
+    config register -id "maxsredirs" -type int -default 5 \
+        -desc "Максимальное число редиректов (заголовки 301,302)" -access "n" -folder "gettitle"
+
+    config register -id "maxmredirs" -type int -default 3 \
+        -desc "Максимальное число meta-редиректов (meta refresh)" -access "n" -folder "gettitle"
+
     config register -id "readlimit" -type int -default 11264 \
         -desc "Максимальное число загружаемых байтов" -access "n" -folder "gettitle"
+
+    config register -id "showredirscount" -type bool -default 0 \
+        -desc "Показывать кол-во выполненных редиректов" -access "n" -folder "gettitle"
 
     config register -id "showsize" -type bool -default 0 \
         -desc "Показывать размер файла (пока сделано только для изображений)" -access "n" -folder "gettitle"
@@ -103,10 +112,11 @@ proc ::gettitle::init {  } {
     msgreg {
         err.badurl      эта строка не похожа на ссылку
 
-        main.inf        &L&p%s&L%s&n: %s
+        main.inf        &L&p%s&L%s&n: %s %s
         main.time       " &K(&g%s %s&K)"
+        main.debug      &K[&g%s&K]&n
         main.url        &K<&B%s&K>&n
-        main.size       Size - %s.
+        main.add        %s - %s
 
         size.bytes      &g%s&n %s
         size.kbytes     &r%s&n %s
@@ -123,7 +133,7 @@ proc ::gettitle::init {  } {
 
         ignores         список игнорования: &R%s&n.
         join.ignores    "&K,&R "
-        join.size       " &K::&R "
+        join.add        " &K::&R "
     }
 }
 
@@ -221,12 +231,13 @@ proc ::gettitle::run { sid } {
         }
 
         session set StartGet [clock clicks]; # пускаем счетчик
+        session set MetaRedirs 0
 
         http run $url \
             -mark "Get" \
             -norecode \
             -readlimit [config get readlimit] \
-            -redirects 5 \
+            -redirects [config get maxsredirs] \
             -useragent "Opera/9.62 (X11; Linux i686; U; en) Presto/2.1.1"
 
         unset url
@@ -235,7 +246,8 @@ proc ::gettitle::run { sid } {
 
     if { $Mark eq "Get" } {
         set GetTime [clock clicks]; # замеряем время получения
-        session import StartGet
+#        session import StartGet MetaRedirs
+        session set MetaRedirs [incr MetaRedirs]
 
         if { $HttpStatus < 0 } {
             debug -err "Ошибка запроса '%s'." $HttpError
@@ -243,7 +255,7 @@ proc ::gettitle::run { sid } {
             return
         }
 
-#        debug -debug "GetTime: %0.3f ms" [expr {($GetTime - $StartGet) / 1000.0}]
+        debug -debug "GetTime: %0.3f ms" [expr {($GetTime - $StartGet) / 1000.0}]
 
 #        debug $HttpUrl
 
@@ -251,9 +263,32 @@ proc ::gettitle::run { sid } {
 
         if {([lsearch $alltypes $HttpMetaType] != -1)} {
 
-            set title [get_title $HttpData $HttpMetaCharset]
+#++ <head></head>
+            set tmpdata [string tolower $HttpData]; set first "0"; set last "end"
+            if {[set first [string first "<head>" $tmpdata]] != -1} {
+                if {[set last [string first "</head>" $tmpdata $first]] == -1} {
+                    set last "end"
+                }
+                session set HttpHead [string range $HttpData $first $last]
 
-            set title [string stripspace [html unspec [html untag $title]]]
+                if {([set url [catch_refresh $sid]] ne "") \
+                        && ($MetaRedirs < [config get maxmredirs])} {
+                    http run $url \
+                        -mark "Get" \
+                        -norecode \
+                        -readlimit [config get readlimit] \
+                        -redirects 2 \
+                        -useragent "Opera/9.62 (X11; Linux i686; U; en) Presto/2.1.1" \
+                        -return
+                }
+            } else {
+                debug -debug "Headers are not found; working with a full page"
+                session set HttpHead $HttpData
+            }
+            unset tmpdata first last
+#--
+
+            set title [string stripspace [html unspec [html untag [get_title $sid]]]]
 
             set maxlen [config get maxlen]
 
@@ -272,7 +307,17 @@ proc ::gettitle::run { sid } {
                     set GTime ""
                 }
 
-                reply -noperson -uniq "main.inf" "URL title" $GTime [cformat "main.url" $title]
+                if {[config get showredirscount] || $CmdEventMark eq ""} {
+                    set dinfo [list]
+                    lappend dinfo [cformat "main.add" "S" $HttpRedirCount]
+                    lappend dinfo [cformat "main.add" "M" [expr {$MetaRedirs - 1}]]
+                    set redirs [cformat "main.debug" [cjoin $dinfo "join.add"]]
+                    unset dinfo
+                } else {
+                    set redirs ""
+                }
+
+                reply -noperson -uniq "main.inf" "URL title" $GTime [cformat "main.url" $title] $redirs
             } else {
                 debug -debug "Title is empty"
                 if {$CmdEventMark eq ""} { reply -err "ошибка: пустой заголовок"}
@@ -321,7 +366,9 @@ proc ::gettitle::run { sid } {
                     set GTime ""
                 }
 
-                reply -noperson -uniq "main.inf" $type $GTime [cformat "main.size" [cjoin $_ "join.size"]]
+                reply -noperson -uniq "main.inf" $type $GTime \
+                        [cformat "main.add" "Size" [cjoin $_ "join.add"]] \
+                        [cformat "main.add" "Type" [cformat "main.url" $HttpMetaType]]
 
                 unset ksize msize GTime _ type
             }
@@ -437,7 +484,11 @@ proc ::gettitle::get_cp {data metacp} {
     return $ret
 }
 
-proc ::gettitle::get_title {data metacp} {
+proc ::gettitle::get_title { sid } {
+    session import
+
+    set data $HttpHead
+    set metacp $HttpMetaCharset
 
     set ret ""
 
@@ -471,6 +522,37 @@ proc ::gettitle::get_title {data metacp} {
     unset data
 
     return $ret
+}
+
+proc ::gettitle::get_url { HttpUrl v } {
+
+#++ ripped from ck.http
+    if {[regexp -nocase -- {^https?://} $v]} {
+        set HttpMetaLocation $v
+    } elseif {[string index $v 0] eq "/"} {
+        regexp -nocase -- {^(https?://[^/\?]+)} $HttpUrl -> url
+        set HttpMetaLocation "${url}${v}"
+    } else {
+        set url [join [lrange [split $HttpUrl "/"] 0 end-1] "/"]
+        set HttpMetaLocation "${url}/${v}"
+    }
+#--
+    return $HttpMetaLocation
+}
+
+proc ::gettitle::catch_refresh { sid } {
+    session import
+
+    if {[regexp -- {<meta http-equiv=[\"\']?refresh[\"\']?([^>]+)>} [string tolower $HttpHead] -> meta] \
+            && [regexp -- {content=[\"\']([0-9\.]+)[\s\;]*(?:url=)?([^\"\']+)?} $meta -> time url]} {
+        debug -debug "Time: %s; Url: %s" $time $url
+        if {[string is double $time] && ($time < 1)} {
+            debug -debug "New url: %s" [set url [get_url $HttpUrl $url]]
+            return [get_url $HttpUrl $url]
+        }
+    }
+
+    return ""
 }
 
 ::gettitle::init
