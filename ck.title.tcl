@@ -246,8 +246,7 @@ proc ::gettitle::run { sid } {
 
     if { $Mark eq "Get" } {
         set GetTime [clock clicks]; # замеряем время получения
-#        session import StartGet MetaRedirs
-        session set MetaRedirs [incr MetaRedirs]
+        session set MetaRedirs [incr MetaRedirs]; # ошибка при подсчете, поправить.
 
         if { $HttpStatus < 0 } {
             debug -err "Ошибка запроса '%s'." $HttpError
@@ -279,6 +278,8 @@ proc ::gettitle::run { sid } {
                         -readlimit [config get readlimit] \
                         -redirects 2 \
                         -useragent "Opera/9.62 (X11; Linux i686; U; en) Presto/2.1.1" \
+                        -heads [list "Referer" $HttpUrl] \
+                        -cookpack $HttpMetaCookie \
                         -return
                 }
             } else {
@@ -371,6 +372,9 @@ proc ::gettitle::run { sid } {
                         [cformat "main.add" "Type" [cformat "main.url" $HttpMetaType]]
 
                 unset ksize msize GTime _ type
+            }  else {
+                debug -debug "Empty 'Content-Length'"
+                if {$CmdEventMark eq ""} { reply -err "ошибка: размер файла неизвестен" }
             }
         } else {
             debug -debug "Unknown 'Content-Type': '%s'" $HttpMetaType
