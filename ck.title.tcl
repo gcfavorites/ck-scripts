@@ -5,7 +5,7 @@ encoding system utf-8
 ::ck::require strings
 
 namespace eval ::gettitle {
-    variable version 0.5
+    variable version 0.6
     variable author  "kns @ RusNet"
 
 
@@ -134,6 +134,8 @@ proc ::gettitle::init {  } {
         ignores         список игнорования: &R%s&n.
         join.ignores    "&K,&R "
         join.add        " &K::&R "
+        join.dim        "x"
+        join.all        " % "
     }
 }
 
@@ -246,7 +248,6 @@ proc ::gettitle::run { sid } {
 
     if { $Mark eq "Get" } {
         set GetTime [clock clicks]; # замеряем время получения
-        session set MetaRedirs [incr MetaRedirs]; # ошибка при подсчете, поправить.
 
         if { $HttpStatus < 0 } {
             debug -err "Ошибка запроса '%s'." $HttpError
@@ -254,7 +255,7 @@ proc ::gettitle::run { sid } {
             return
         }
 
-        debug -debug "GetTime: %0.3f ms" [expr {($GetTime - $StartGet) / 1000.0}]
+#        debug -debug "GetTime: %0.3f ms" [expr {($GetTime - $StartGet) / 1000.0}]
 
 #        debug $HttpUrl
 
@@ -279,8 +280,9 @@ proc ::gettitle::run { sid } {
                         -redirects 2 \
                         -useragent "Opera/9.62 (X11; Linux i686; U; en) Presto/2.1.1" \
                         -heads [list "Referer" $HttpUrl] \
-                        -cookpack $HttpMetaCookie \
-                        -return
+                        -cookpack $HttpMetaCookie
+                    session set MetaRedirs [incr MetaRedirs]
+                    return
                 }
             } else {
                 debug -debug "Headers are not found; working with a full page"
@@ -311,7 +313,7 @@ proc ::gettitle::run { sid } {
                 if {[config get showredirscount] || $CmdEventMark eq ""} {
                     set dinfo [list]
                     lappend dinfo [cformat "main.add" "S" $HttpRedirCount]
-                    lappend dinfo [cformat "main.add" "M" [expr {$MetaRedirs - 1}]]
+                    lappend dinfo [cformat "main.add" "M" $MetaRedirs]
                     set redirs [cformat "main.debug" [cjoin $dinfo "join.add"]]
                     unset dinfo
                 } else {
@@ -348,17 +350,37 @@ proc ::gettitle::run { sid } {
             if {[string is digit $HttpMetaLength] && ($HttpMetaLength > 0)} {
 #                debug -debug "Original size: %s" $HttpMetaLength
 
-                set_ [list]
+                set repl [list]
 
-                lappend_ [cformat "size.bytes" $HttpMetaLength B]
+#++ size
+                set size [list]
+                lappend size [cformat "size.bytes" $HttpMetaLength B]
 
                 if {[set ksize [expr {$HttpMetaLength / 1024.0}]] >= 1} {
-                    lappend_ [cformat "size.kbytes" [format "%0.1f" $ksize] kB]
+                    lappend size [cformat "size.kbytes" [format "%0.1f" $ksize] kB]
                 }
 
                 if {[set msize [expr {$HttpMetaLength / 1048576.0}]] >= 1} {
-                    lappend_ [cformat "size.mbytes" [format "%0.2f" $msize] MB]
+                    lappend size [cformat "size.mbytes" [format "%0.2f" $msize] MB]
                 }
+
+                lappend repl [cformat "main.add" "Size" [cjoin $size "join.add"]]
+                unset size
+#-- size
+
+#++ extra
+                set extra [get_dimensions $HttpData [lindex [split $HttpMetaType "/"] end]]
+                if {$type eq "Image" && [llength $extra]} {
+                    lappend repl [cformat "main.add" [cjoin [list "W" "H"] "join.dim"] [cjoin $extra "join.dim"]]
+                }
+                unset extra
+#-- extra
+
+#++ mtype
+                lappend repl [cformat "main.add" "Type" [cformat "main.url" $HttpMetaType]]
+#-- mtype
+
+                set repl [cjoin $repl "join.all"]
 
                 set EndGet [clock clicks]
                 if {[config get showspeed]} {
@@ -367,11 +389,9 @@ proc ::gettitle::run { sid } {
                     set GTime ""
                 }
 
-                reply -noperson -uniq "main.inf" $type $GTime \
-                        [cformat "main.add" "Size" [cjoin $_ "join.add"]] \
-                        [cformat "main.add" "Type" [cformat "main.url" $HttpMetaType]]
+                reply -noperson -uniq "main.inf" $type $GTime $repl ""
 
-                unset ksize msize GTime _ type
+                unset ksize msize GTime type repl
             }  else {
                 debug -debug "Empty 'Content-Length'"
                 if {$CmdEventMark eq ""} { reply -err "ошибка: размер файла неизвестен" }
@@ -558,5 +578,111 @@ proc ::gettitle::catch_refresh { sid } {
 
     return ""
 }
+
+#++ thnx to tcllib && wiki.tcl.tk
+proc ::gettitle::get_dimensions {data type} {
+    debug -debug "trying to get image dimentions; type: %s" $type
+    switch -- $type {
+        jpg     -
+        pjpeg   -
+        jpeg {
+            proc dimentions {data} {
+                set ret [list]
+
+                if {[string range $data 0 2] eq "\xFF\xD8\xFF"} {
+                set i 2
+
+                    while {[string index $data $i] eq "\xFF"} {
+                        binary scan [string range $data [incr i] $i+2] H2S type len
+                        incr i 3
+                        # convert to unsigned
+                        set len [expr {$len & 0x0000FFFF}]
+                        # decrement len to account for marker bytes
+                        incr len -2
+                        if {[string match {c[0-3]} $type]} {
+                            set p $i
+                            break
+                        }
+                        incr i $len
+                    }
+
+                    if {[info exists p]} {
+                        binary scan [string range $data $p $p+4] cSS precision height width
+                        set ret [list $width $height]
+                    }
+                }
+
+                return $ret
+            }
+        }
+        png {
+            proc dimentions {data} {
+                set ret [list]
+                if {[string range $data 0 7] eq "\x89PNG\r\n\x1a\n"} {
+                    set i 0
+                    binary scan [string range $data [incr i 8] $i+7] Ia4 len type
+                    set r [string range $data [incr i 8] $i+$len]
+                    if {$i < [string length $data] && $type eq "IHDR"} {
+                        binary scan $r II width height
+                        set ret [list $width $height]
+                    }
+                }
+                return $ret
+            }
+        }
+        gif {
+            proc dimentions {data} {
+                # read GIF signature -- check that this is
+                # either GIF87a or GIF89a
+                set sig [string range $data 0 5]
+                set ret [list]
+                if {$sig eq "GIF87a" || $sig eq "GIF89a"} {
+                    # read "logical screen size", this is USUALLY the image size too.
+                    # interpreting the rest of the GIF specification is left as an exercise
+                    binary scan [string range $data 6 7] s wid
+                    binary scan [string range $data 8 9] s hgt
+                    set ret [list $wid $hgt]
+                }
+                return $ret
+            }
+        }
+        bmp {
+            proc dimentions {data} {
+                set ret [list]
+                if {[string range $data 0 1] eq "BM"} {
+                    binary scan [string range $data 18 21] i width
+                    binary scan [string range $data 22 25] i height
+                    set ret [list $width $height]
+                }
+
+                return $ret
+            }
+        }
+        "svg+xml" {
+            proc dimentions {data} {
+                set ret [list]
+                if {[regexp -- {width="(\d+)(?:\D|\s)} $data - width] \
+                        && [regexp -- {height="(\d+)(?:\D|\s)} $data - height]} {
+                    set ret [list $width $height]
+                }
+
+                return $ret
+            }
+        }
+        default {
+            return [list]
+        }
+    }
+
+    if {[catch {dimentions $data} ret]} {
+        debug -err $ret
+        set ret [list]
+    }
+
+    rename dimentions ""
+
+    return $ret
+}
+#-- get_dimensions
 
 ::gettitle::init
