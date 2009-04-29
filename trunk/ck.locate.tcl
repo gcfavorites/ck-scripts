@@ -3,7 +3,7 @@ encoding system utf-8
 ::ck::require cmd 0.4
 
 namespace eval ::locate {
-  variable version "1.2"
+  variable version "1.3"
   variable author  "Chpock <chpock@gmail.com> with comments from Smollett@RusNet"
   variable editor  "kns@RusNet"
 
@@ -22,19 +22,19 @@ proc ::locate::init { } {
     -bind "dns" -bind "днс" -flood 8:60 -config "locate"
 
   cmd register locateping ::locate::run -autousage -doc "locate.ping" \
-    -bind "pingip" -bind "pip" -flood 3:60 -config "locate"
+    -force-prefix -bind "pingip" -bind "pip" -flood 3:60 -config "locate"
 
 
   cmd doc -link [list "locate.dns" "locate.ping"] "locate" {~*!loc* <ip/domain/nick>~ - попытка выяснить географическое местонахождение.}
   cmd doc -link [list "locate" "locate.ping"] "locate.dns" {~*!dns* <ip/domain/nick>~ - попытка отрезолвить домен/IP.}
-  cmd doc -link [list "locate" "locate.dns"] "locate.ping" {~*!dns* <ip/domain/nick>~ - попытка отрезолвить домен/IP.}
+  cmd doc -link [list "locate" "locate.dns"] "locate.ping" {~*!pingip* <ip/domain/nick>~ - попытка пропинговать домен/IP.}
 
 
   config register -id "pingip" -type bool -default 0 \
     -desc "Enable pingip." -access "n" -folder "locate"
 
   config register -id "pingcount" -type int -default 4 \
-    -desc "Count of sent packages" -access "n" -folder "locate"
+    -desc "Count of sent packages" -access "n" -folder "locate" -disableon [list "pingip" 0]
 
   msgreg {
     spec.block       &bInfo &R%s&K:&c Special Block &K[&p%s&K]&c %s
