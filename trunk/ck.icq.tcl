@@ -51,7 +51,7 @@ proc ::icqcheck::run { sid } {
             set query [list]
             lappend query "human" "1" "uin" $Text
             if {[rand 2]} { lappend query "youwereadded" "on" }
-            lappend query "uin4login" "" "password4login" "" "vN6VJ" "1"
+            lappend query "uin4login" "" "password4login" "" "dN6VJ" "1"
 
 #            debug -info "query: $query"
 
