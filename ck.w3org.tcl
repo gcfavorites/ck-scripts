@@ -55,7 +55,7 @@ proc ::w3org::run { sid } {
                 -post \
                 -query [list \
                             "uri" "http://${Text}" "charset" "(detect automatically)" \
-                            "doctype" "Inline" "group" "0"\
+                            "doctype" "Inline" "group" "0" \
                         ] \
                 -mark "Start" \
                 -useragent "Opera/9.61 (X11; Linux i686; U; en) Presto/2.1.1"
