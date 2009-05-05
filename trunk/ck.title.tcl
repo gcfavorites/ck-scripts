@@ -122,6 +122,8 @@ proc ::gettitle::init {  } {
         size.kbytes     &r%s&n %s
         size.mbytes     &R%s&n %s
 
+        mtype           [%s]
+
         exists          &K<&R%s&K>&n уже в списке игнорирования &K(&g%s&K)&n
         notexists       &K<&R%s&K>&n не найден в списке игнорирования
 
@@ -273,6 +275,12 @@ proc ::gettitle::run { sid } {
 
                 if {([set url [catch_refresh $sid]] ne "") \
                         && ($MetaRedirs < [config get maxmredirs])} {
+
+                    set cookie [list]
+                    foreach_ $HttpMetaCookie {
+                        foreachkv $_ {lappend cookie $k $v}
+                    }
+
                     http run $url \
                         -mark "Get" \
                         -norecode \
@@ -280,7 +288,7 @@ proc ::gettitle::run { sid } {
                         -redirects 2 \
                         -useragent "Opera/9.62 (X11; Linux i686; U; en) Presto/2.1.1" \
                         -heads [list "Referer" $HttpUrl] \
-                        -cookpack $HttpMetaCookie
+                        -cookpack $cookie
                     session set MetaRedirs [incr MetaRedirs]
                     return
                 }
@@ -303,12 +311,9 @@ proc ::gettitle::run { sid } {
                     append title "..."
                 }
 
-                set EndGet [clock clicks]; # останавливаем счетчик
-                if {[config get showspeed]} {
-                    set GTime [cformat "main.time" [expr {($EndGet - $StartGet) / 1000}] ms]
-                } else {
-                    set GTime ""
-                }
+                session set EndGet [clock clicks]; #останавливаем счетчик
+                set GTime ""
+                stop_counter $sid
 
                 if {[config get showredirscount] || $CmdEventMark eq ""} {
                     set dinfo [list]
@@ -353,19 +358,7 @@ proc ::gettitle::run { sid } {
                 set repl [list]
 
 #++ size
-                set size [list]
-                lappend size [cformat "size.bytes" $HttpMetaLength B]
-
-                if {[set ksize [expr {$HttpMetaLength / 1024.0}]] >= 1} {
-                    lappend size [cformat "size.kbytes" [format "%0.1f" $ksize] kB]
-                }
-
-                if {[set msize [expr {$HttpMetaLength / 1048576.0}]] >= 1} {
-                    lappend size [cformat "size.mbytes" [format "%0.2f" $msize] MB]
-                }
-
-                lappend repl [cformat "main.add" "Size" [cjoin $size "join.add"]]
-                unset size
+                lappend repl [cformat "main.add" "Size" [cjoin [format_size $sid] "join.add"]]
 #-- size
 
 #++ extra
@@ -377,21 +370,18 @@ proc ::gettitle::run { sid } {
 #-- extra
 
 #++ mtype
-                lappend repl [cformat "main.add" "Type" [cformat "main.url" $HttpMetaType]]
+                lappend repl [cformat "main.add" "Type" [cformat "mtype" [get_type $type $HttpMetaType]]]
 #-- mtype
 
                 set repl [cjoin $repl "join.all"]
 
-                set EndGet [clock clicks]
-                if {[config get showspeed]} {
-                    set GTime [cformat "main.time" [expr {($EndGet - $StartGet) / 1000}] ms]
-                } else {
-                    set GTime ""
-                }
+                session set EndGet [clock clicks]; #останавливаем счетчик
+                set GTime ""
+                stop_counter $sid
 
                 reply -noperson -uniq "main.inf" $type $GTime $repl ""
 
-                unset ksize msize GTime type repl
+                unset GTime type repl
             }  else {
                 debug -debug "Empty 'Content-Length'"
                 if {$CmdEventMark eq ""} { reply -err "ошибка: размер файла неизвестен" }
@@ -491,9 +481,6 @@ proc ::gettitle::get_cp {data metacp} {
         debug -debug- "set cp \$metacp"
     } else {unset ->}
 
-    debug -debug- "MetaCp: $metacp"
-    debug -debug- "rawcp: $cp"
-
     set ret [::ck::http::charset2encoding $cp]
 
     if {$ret eq "binary"} {
@@ -501,12 +488,40 @@ proc ::gettitle::get_cp {data metacp} {
 #        set ret $::ck::ircencoding
     }
 
-    debug -debug- "ret: $ret"
+    debug -debug- "MetaCp: '%s' %% RawCp: '%s' %% Ret: '%s'" $metacp $cp $ret
 
-    unset data metacp cp
+    unset cp
 
     return $ret
 }
+
+#++ check_cp - correcting codepage
+proc ::gettitle::check_cp {title} {
+
+    upvar cp cp
+
+    set cyrtitle [encoding convertfrom $cp $title]
+
+    debug -debug "String in the detected cp: '%s'" $cyrtitle
+    debug -debug- "Trying to verify the codepage"
+
+    regsub -all -- {[^а-яА-ЯёЁ]} $cyrtitle "" cyrtitle
+    debug -debug- "Cyrillic part of the line: %s" $cyrtitle
+
+    set cyrtitle [string range $cyrtitle 0 4]
+    set cyrtitle_ "[string tolower [string index $cyrtitle 0]][string toupper [string range $cyrtitle 1 end]]"
+
+    if {($cp eq "cp1251") && ([string length $cyrtitle] > 4) \
+            && ($cyrtitle eq ${cyrtitle_})} {
+        debug -debug "Возможно неправильное определение кодировки (%s), пробуем %s" $cp "koi8-r"
+        set cp "koi8-r"
+    }
+
+    unset cyrtitle cyrtitle_
+
+    return $cp
+}
+#-- check_cp
 
 proc ::gettitle::get_title { sid } {
     session import
@@ -524,19 +539,7 @@ proc ::gettitle::get_title { sid } {
         debug -debug "rawtitle: \"$title\""
 
         set cp [get_cp $data $metacp]
-
-#++ Попытка выправить кодировку
-        debug -debug "String in the detected cp: '%s'" [encoding convertfrom $cp $title]
-        debug -debug- "Trying to verify the codepage"
-        regsub -all -- {[^а-яА-ЯёЁ]} [encoding convertfrom $cp $title] "" cyrtitle
-        debug -debug- "Cyrillic part of the line: %s" $cyrtitle
-
-        if {($cp eq "cp1251") && ([string length [set cyrtitle [string range $cyrtitle 0 4]]] > 4) \
-                && ($cyrtitle eq "[string tolower [string index $cyrtitle 0]][string toupper [string range $cyrtitle 1 end]]")} {
-            debug -debug "Возможно неправильное определение кодировки (%s), пробуем %s" $cp "koi8-r"
-            set cp "koi8-r"
-        }
-#--
+        check_cp $title; # Попытка выправить кодировку
 
         set ret [encoding convertfrom $cp $title]
 
@@ -684,5 +687,52 @@ proc ::gettitle::get_dimensions {data type} {
     return $ret
 }
 #-- get_dimensions
+
+#++ get_type
+proc ::gettitle::get_type {type mtype} {
+    switch -- $type {
+        "Image" {set repl [lindex [split $mtype "/"] end]}
+        default {set repl $mtype}
+    }
+
+    return $repl
+}
+#-- get_type
+
+#++ stop_counter
+proc ::gettitle::stop_counter {sid} {
+    session import
+
+    upvar GTime GTime
+
+    if {[config get showspeed]} {
+        set GTime [cformat "main.time" [expr {($EndGet - $StartGet) / 1000}] ms]
+    }
+
+    return
+}
+#-- stop_counter
+
+
+#++ format_size
+proc ::gettitle::format_size {sid} {
+    session import
+
+    set size [list]
+    lappend size [cformat "size.bytes" $HttpMetaLength B]
+
+    if {[set ksize [expr {$HttpMetaLength / 1024.0}]] >= 1} {
+        lappend size [cformat "size.kbytes" [format "%0.1f" $ksize] kB]
+    }
+
+    if {[set msize [expr {$HttpMetaLength / 1048576.0}]] >= 1} {
+        lappend size [cformat "size.mbytes" [format "%0.2f" $msize] MB]
+    }
+
+    unset ksize msize
+
+    return $size
+}
+#-- format_size
 
 ::gettitle::init
