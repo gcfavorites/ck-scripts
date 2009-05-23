@@ -5,7 +5,7 @@ encoding system utf-8
 ::ck::require strings
 
 namespace eval ::gettitle {
-    variable version 0.6
+    variable version 0.7
     variable author  "kns @ RusNet"
 
 
@@ -122,6 +122,7 @@ proc ::gettitle::init {  } {
         size.kbytes     &r%s&n %s
         size.mbytes     &R%s&n %s
 
+        dbg             Возможно неправильное определение кодировки (%s), пробуем %s
         mtype           [%s]
 
         exists          &K<&R%s&K>&n уже в списке игнорирования &K(&g%s&K)&n
@@ -278,7 +279,7 @@ proc ::gettitle::run { sid } {
 
                     set cookie [list]
                     foreach_ $HttpMetaCookie {
-                        foreachkv $_ {lappend cookie $k $v}
+                        foreachkv $_ {lappend cookie $k $v; unset k v}
                     }
 
                     http run $url \
@@ -290,6 +291,7 @@ proc ::gettitle::run { sid } {
                         -heads [list "Referer" $HttpUrl] \
                         -cookpack $cookie
                     session set MetaRedirs [incr MetaRedirs]
+                    unset cookie
                     return
                 }
             } else {
@@ -307,7 +309,7 @@ proc ::gettitle::run { sid } {
                 debug -debug- "title: $title"
 
                 if {[string length $title] > ${maxlen}} {
-                    set title [string trimright [string range $title 0 [expr ${maxlen}-3]] [list "." " " "," ":" ";" "¤" "-"]]
+                    set title [string trimright [string range $title 0 [expr ${maxlen}-3]] ". ,:;¤-"]
                     append title "..."
                 }
 
@@ -370,7 +372,14 @@ proc ::gettitle::run { sid } {
 #-- extra
 
 #++ mtype
-                lappend repl [cformat "main.add" "Type" [cformat "mtype" [get_type $type $HttpMetaType]]]
+#                lappend repl [cformat "main.add" "Type" [cformat "mtype" [get_type $type $HttpMetaType]]]
+                lappend repl    [cformat "main.add" "Type" \
+                                    [cformat "mtype" \
+                                        [get_type \
+                                            $type [lindex [split $HttpMetaType "/"] end] \
+                                        ] \
+                                    ] \
+                                ]
 #-- mtype
 
                 set repl [cjoin $repl "join.all"]
@@ -406,7 +415,6 @@ proc ::gettitle::ignore { sid } {
         set i ""
         set_ ""
 
-        # юзаем foreach для совместимости
         foreach_ $tignores {
             if {[string match -nocase $Text $_] \
                     || [string match -nocase $_ $Text]} {
@@ -508,18 +516,41 @@ proc ::gettitle::check_cp {title} {
     regsub -all -- {[^а-яА-ЯёЁ]} $cyrtitle "" cyrtitle
     debug -debug- "Cyrillic part of the line: %s" $cyrtitle
 
-    set cyrtitle [string range $cyrtitle 0 4]
-    set cyrtitle_ "[string tolower [string index $cyrtitle 0]][string toupper [string range $cyrtitle 1 end]]"
+    set frmt "Возможно неправильное определение кодировки (%s), пробуем %s"
+    set strlen [string length $cyrtitle]
 
-    if {($cp eq "cp1251") && ([string length $cyrtitle] > 4) \
-            && ($cyrtitle eq ${cyrtitle_})} {
-        debug -debug "Возможно неправильное определение кодировки (%s), пробуем %s" $cp "koi8-r"
-        set cp "koi8-r"
+    switch -exact -- $cp {
+        "cp1251" {
+            set strtmp [regexp -all -- {[РС]} $cyrtitle]
+            set mctitle [string range $cyrtitle 0 4]
+            set mctitle_ [string tolower [string index $mctitle 0]]
+            append mctitle_ [string toupper [string range $mctitle 1 end]]
+
+            if {([string length $mctitle] > 4) && ($mctitle eq ${mctitle_})} {
+                debug -debug [format $frmt $cp "koi8-r"]
+                set cp "koi8-r"
+            } elseif {$strlen > 18 && [expr {1.0 * $strtmp / $strlen}] > 0.28} {
+                debug -debug [format $frmt $cp "utf-8"]
+                set cp "utf-8"
+            }
+
+            unset strtmp mctitle mctitle_
+        }
+
+        "koi8-r" {
+            set strtmp [regexp -all -- {[пя]} $cyrtitle]
+            if {$strlen > 18 && [expr {1.0 * $strtmp / $strlen}] > 0.28} {
+                debug -debug [format $frmt $cp "utf-8"]
+                set cp "utf-8"
+            }
+
+            unset strtmp
+        }
     }
 
-    unset cyrtitle cyrtitle_
+    unset strlen cyrtitle
 
-    return $cp
+    return 1
 }
 #-- check_cp
 
@@ -531,7 +562,7 @@ proc ::gettitle::get_title { sid } {
 
     set ret ""
 
-    if {![regexp -nocase -- {<title>(.*?)</title>} $data -> title] \
+    if {![regexp -nocase -- {<title>(.+?)</title>} $data -> title] \
             && ![regexp -nocase -- {<meta[^>]+name="title"[^>]+content="([^\"]+)"} $data -> title] \
             && ![regexp -nocase -- {<card[^>]+title="([^\"]+)"} $data -> title]} {
         debug -err "Title not found"
@@ -688,16 +719,20 @@ proc ::gettitle::get_dimensions {data type} {
 }
 #-- get_dimensions
 
+if 0 {
 #++ get_type
 proc ::gettitle::get_type {type mtype} {
-    switch -- $type {
-        "Image" {set repl [lindex [split $mtype "/"] end]}
-        default {set repl $mtype}
+    switch -exact -- $type {
+        "Audio" -
+        "Video" -
+        "Image" {return [lindex [split $mtype "/"] end]}
+        default {return $mtype}
     }
 
-    return $repl
+    return 1; # -_-
 }
 #-- get_type
+}
 
 #++ stop_counter
 proc ::gettitle::stop_counter {sid} {
