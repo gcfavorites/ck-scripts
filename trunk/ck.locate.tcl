@@ -300,8 +300,7 @@ proc ::locate::got_whois { sid } {
 	  set v [string trim $v]
 	  if { $WhoisServer eq "" } {
 	    if { [string match -nocase "*These IP addresses are assigned in the AFRINIC region.*" $v] } {
-	      session set WhoisServer "whois.afrinic.net"
-	      session event -return MakeWhois
+	      session event -return MakeWhois WhoisServer "whois.afrinic.net"
 	    }
 	  }
 	  lappend obj $k $v
@@ -318,10 +317,10 @@ proc ::locate::got_whois { sid } {
 	  set dbtype "ARIN"
 	} elseif { [regexp {\s+\(NET-\d+-\d+-\d+-\d+-\d+\)\s*$} $line] } {
 	  if { $WhoisServer eq "" } {
-	    session set WhoisServer "whois.lacnic.net"
-	    session event -return MakeWhois
+	    session event -return MakeWhois WhoisServer "whois.lacnic.net"
 	  }
-	  debug -warn "rcvd redirect while whois <%s>, but already at alcnic..." $LocIP
+	  debug -warn "rcvd redirect while whois <%s>, but already at lacnic..." $LocIP
+	  continue
 	} else {
 	  debug -debug "pre str:%s:" $line
 	  continue
@@ -329,14 +328,11 @@ proc ::locate::got_whois { sid } {
 	incr i -1
 	if { $WhoisServer eq "" } {
 	  if { [string match -nocase "*RIPE Network Coordination Centre*" $line] } {
-	    session set WhoisServer "whois.ripe.net"
-	    session event -return MakeWhois
+	    session event -return MakeWhois WhoisServer "whois.ripe.net"
 	  } elseif { [string match -nocase "*Latin American and Caribbean IP address Regional Registry*" $line] } {
-	    session set WhoisServer "whois.lacnic.net"
-	    session event -return MakeWhois
+	    session event -return MakeWhois WhoisServer "whois.lacnic.net"
 	  } elseif { [string match -nocase "*Asia Pacific Network Information Centre*" $line] } {
-	    session set WhoisServer "whois.apnic.net"
-	    session event -return MakeWhois
+	    session event -return MakeWhois WhoisServer "whois.apnic.net"
 	  }
 	}
       }
