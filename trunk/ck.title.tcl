@@ -375,9 +375,7 @@ proc ::gettitle::run { sid } {
 #                lappend repl [cformat "main.add" "Type" [cformat "mtype" [get_type $type $HttpMetaType]]]
                 lappend repl    [cformat "main.add" "Type" \
                                     [cformat "mtype" \
-                                        [get_type \
-                                            $type [lindex [split $HttpMetaType "/"] end] \
-                                        ] \
+                                        [lindex [split $HttpMetaType "/"] end] \
                                     ] \
                                 ]
 #-- mtype
