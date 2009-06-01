@@ -1,7 +1,7 @@
 encoding system utf-8
 ::ck::require cmd
 ::ck::require http
-::ck::require strings
+#::ck::require strings
 
 namespace eval ::gramotaru {
     variable version 0.1
@@ -10,16 +10,15 @@ namespace eval ::gramotaru {
 
     namespace import -force ::ck::cmd::*
     namespace import -force ::ck::http::http
-    namespace import -force ::ck::strings::html
-
+#    namespace import -force ::ck::strings::html
 }
 
 proc ::gramotaru::init {  } {
 
     cmd register gramotaru [namespace current]::run -doc "gramotaru" -autousage \
-        -bind "gramotaru" -bind "dict"
+        -bind "gramotaru" -bind "gramota" -bind "dict" -bind "грамота" -bind "словарь"
 
-    cmd doc "gramotaru" {~*!dict* <слово>~ - поиск значения *слова* на портале gramota.ru.}
+    cmd doc "gramotaru" {~*!dict* [-число] <слово>~ - поиск значения *слова* на портале gramota.ru}
 
     msgreg {
         err.http                &BОшибка связи с сайтом&K:&R %s
@@ -32,10 +31,20 @@ proc ::gramotaru::run { sid } {
 
     if { $Event eq "CmdPass" } {
 
-        set Text [lindex $StdArgs 1]
+        if {[regexp {^-?(\d+).*} [lindex $StdArgs 1] -> num]} {
+            session set num [scan $num %d]
+#            debug "num: $num"
+            set Text [lindex $StdArgs 2]
+            unset ->
+        } else {
+            set Text [lindex $StdArgs 1]
+            session set num 1
+        }
 
-        if {[regexp -- {[^А-Яа-яЁё\*\?]} $Text]} {
+        if { [regexp -- {[^А-Яа-яЁё\*\?]} $Text]} {
             reply "можно использовать только буквы русского алфавита и знаки '*','?'."
+        } elseif {[string is space $Text]} {
+            replydoc gramotaru
         } else {
             http run "http://pda.gramota.ru/" \
                 -query [list "action" "dic" "word" $Text] \
@@ -60,11 +69,11 @@ proc ::gramotaru::run { sid } {
 #        debug $HttpData
 
         if {[regexp -- \
-                    {<h2>Искомое слово отсутствует</h2>.*<h2>Похожие слова:</h2>\s*(<p style="padding-left:10px">(.+?))\s*</div>} \
+                    {<h2>Искомое слово отсутствует</h2>.*<h2>Похожие слова:</h2>\s*(<p style="padding-left:10px">.+?)\s*</div>} \
                 $HttpData -> data]} {
             regsub -- {</div>.*$} $data "" data
-            set data [string map [list "<br>" "" "\n" "" "\r" "" "\t" ""] $data]
-            regsub -all -- {</?a[^>]*>} $data "" data
+#            set data [string map [list "<br>" "" "\t" " "] $data]
+ #           regsub -all -- {</?a[^>]*>} $data "" data
 
             set w [regexp -all -inline -- {<p style="padding-left:10px">\s*<(?:b|STRONG)>\s*([^<]+)</(?:b|STRONG)>} $data]
             set words [list]
@@ -84,32 +93,30 @@ proc ::gramotaru::run { sid } {
         } elseif {![regexp -- \
                     {<h2>Толково-словообразовательный</h2>\s*<div style="padding-left:10px">(.+?)</div>} \
                 $HttpData -> data]} {
+# TODO: ускорить получение части. prbl: string first
             set data "Определение в словаре не найдено."
         } else {
             regsub -- {</div>.*$} $data "" data
-            set data [string map [list "<B>" "&L" "</B>" "&L" "<br>" "" "\n" "" "\r" "" "\t" ""] $data]
+            set data [string map [list "<B>" "&L" "</B>" "&L" "<br><li>" "<li>" "<br><br></OL><br>" "\n" "<OL>" "" "\t" " "] $data]
+
+            set signs [split $data \n]
+
+            if {[incr num -1] > [llength $data]} {set num [expr {[llength $data] - 1}]}
+
+            set data [lindex $signs $num]
+
             regsub -all -- {<span class="accent">([^<]+)</span>} $data {\&U\1\&U} data
+            regsub -all -- {<SUP>[^<]+</SUP>} $data "" data
 
-            if {[regexp -- {^(.*)<OL>(.*?)</OL>.*$} $data - i s]} {
-                set s [regexp -all -inline -- {<li>([^<]+)(?:<|>|$)} $s]
-                set signs [list]
-                set x 0
-                foreachkv $s {
-                    incr x
-                    regsub -all -- {\(([^\)]+)\)} $v {\&K(\1)\&n} v
-                    lappend signs "${x}. $v"
-                    unset k v
-                }
+            set x 0; regsub -- {<li>} $data ": [incr x]. " data
+            while {[regsub -- {<li>} $data " [incr x]. " data]} {continue}
 
-                set data "${i}: [join $signs {; }]"
-
-                unset - i s signs x
-            }
+            unset x signs
         }
 
         if {$data ne ""} {
 #            debug $data
-            reply $data
+            reply -multi -noperson $data
         } else {
             reply -err "Ошибка разбора полученных данных"
         }
