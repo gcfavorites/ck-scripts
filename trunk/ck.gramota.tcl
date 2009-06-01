@@ -69,18 +69,23 @@ proc ::gramotaru::run { sid } {
 #        debug $HttpData
 
         if {[regexp -- \
-                    {<h2>Искомое слово отсутствует</h2>.*<h2>Похожие слова:</h2>\s*(<p style="padding-left:10px">.+?)\s*</div>} \
+                    {<h2>Искомое слово отсутствует</h2>.*<h2>Похожие слова:</h2>\s*(<p style="padding-left:10px">.+?)\s*<div} \
                 $HttpData -> data]} {
-            regsub -- {</div>.*$} $data "" data
+            regsub -- {<div.*$} $data "" data
 #            set data [string map [list "<br>" "" "\t" " "] $data]
  #           regsub -all -- {</?a[^>]*>} $data "" data
 
-            set w [regexp -all -inline -- {<p style="padding-left:10px">\s*<(?:b|STRONG)>\s*([^<]+)</(?:b|STRONG)>} $data]
+            set w [regexp -all -inline -- {<p style="padding-left:10px">\s*<a[^>]+>\s*<(?:b|STRONG)>\s*([^<]+)</(?:b|STRONG)>} $data]
             set words [list]
             set x 0
+            set l [list]
             foreachkv $w {
                 incr x
-                lappend words "${x}. [string trimright $v]"
+                set v [string trimright $v "\n\t\r 1234567890"]
+                if {[lsearch -exact $l $v] == -1} {
+                    lappend words "${x}. $v"
+                    lappend l $v
+                }
                 unset k v
             }
 
@@ -89,7 +94,7 @@ proc ::gramotaru::run { sid } {
             } else {
                 set data ""
             }
-            unset w words x
+            unset w words x l
         } elseif {![regexp -- \
                     {<h2>Толково-словообразовательный</h2>\s*<div style="padding-left:10px">(.+?)</div>} \
                 $HttpData -> data]} {
