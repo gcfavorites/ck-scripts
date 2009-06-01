@@ -107,7 +107,7 @@ proc ::gramotaru::run { sid } {
             set data [lindex $signs $num]
 
             regsub -all -- {<span class="accent">([^<]+)</span>} $data {\&U\1\&U} data
-            regsub -all -- {<SUP>[^<]+</SUP>} $data "" data
+            regsub -all -nocase -- {<SUP>[^<]+</SUP>} $data "" data
             regsub -all -- {\(([^\)]+)\)} $data {\&K(\1)\&n} data
 
             set x 0; regsub -- {<li>} $data ": [incr x]. " data
