@@ -99,9 +99,10 @@ proc ::gramotaru::run { sid } {
             regsub -- {</div>.*$} $data "" data
             set data [string map [list "<B>" "&L" "</B>" "&L" "<br><li>" "<li>" "<br><br></OL><br>" "\n" "<OL>" "" "\t" " "] $data]
 
-            set signs [split $data \n]
+            set signs [split [string trim $data] \n]
+            set lsigns [llength $signs]
 
-            if {[incr num -1] > [llength $data]} {set num [expr {[llength $data] - 1}]}
+            if {[incr num -1] > $lsigns} {set num [expr {$lsigns - 1}]}
 
             set data [lindex $signs $num]
 
@@ -111,7 +112,11 @@ proc ::gramotaru::run { sid } {
             set x 0; regsub -- {<li>} $data ": [incr x]. " data
             while {[regsub -- {<li>} $data " [incr x]. " data]} {continue}
 
-            unset x signs
+            if {$lsigns > 1} {
+                set data [format "\[%s/%s\] %s" [incr num] $lsigns $data]
+            }
+
+            unset x signs lsigns
         }
 
         if {$data ne ""} {
