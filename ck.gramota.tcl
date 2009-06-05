@@ -107,7 +107,7 @@ proc ::gramotaru::run { sid } {
             set signs [split [string trim $data] \n]
             set lsigns [llength $signs]
 
-            if {[incr num -1] > $lsigns} {set num [expr {$lsigns - 1}]}
+            if {[incr num -1] >= $lsigns} {set num [expr {$lsigns - 1}]}
 
             set data [lindex $signs $num]
 
