@@ -111,10 +111,12 @@ proc ::soft::run { sid } {
                 reply -noperson soft $c $name $descr $cat $date $size $os $rus $status $link
 
             } else {
-                reply -err notfound
+                reply -err "ошибка парсинга"
             }
 
             unset -
+        }  else {
+                reply -err notfound
         }
     }
 
