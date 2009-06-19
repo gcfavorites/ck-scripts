@@ -4,14 +4,13 @@ encoding system utf-8
 ::ck::require strings
 
 namespace eval ::w3org {
-    variable version 0.1
-    variable author "Xam <xam@egghelp.ru>"
-    variable editor "kns@RusNet"
+    variable version 0.2
+    variable OriginalAuthor "Xam <xam@egghelp.ru>"
+    variable author "kns@RusNet"
 
 
     namespace import -force ::ck::cmd::*
     namespace import -force ::ck::http::http
-    namespace import -force ::ck::strings::html
 
 }
 
@@ -20,7 +19,7 @@ proc ::w3org::init {  } {
     cmd register w3org [namespace current]::run -doc "w3org" -autousage \
         -bind "w3org" -bind "w3c"
 
-    cmd doc "w3org" {~*!w3c* <url>~ - проверка странички на валидность.}
+    cmd doc "w3org" {~*!w3c* [-enc codepage] <url>~ - проверка странички на валидность.}
 
     msgreg {
         err.http        &BОшибка связи с сайтом&K:&R %s
@@ -39,7 +38,9 @@ proc ::w3org::run { sid } {
 
     if { $Event eq "CmdPass" } {
 
-        set Text [lindex $StdArgs 1]
+        set args [lrange $StdArgs 1 end]
+        getargs -enc str ""
+        set Text [lindex $args 0]
 
         if {([string length $Text] < 3) \
                 || ([string first "." $Text] == -1)} {
@@ -47,19 +48,25 @@ proc ::w3org::run { sid } {
             return
         }
 
-        set Text [string map -nocase [list "http://" ""] $Text]
+        regsub -nocase -- {^http://} $Text "" Text
 
-        session set type [list [lindex $StdArgs 2]]
+        array set query [list]
+
+        set query(uri) "http://${Text}"
+        set query(charset) "(detect automatically)"
+        set query(doctype) "Inline"
+        set query(group) "0"
+
+        if {![string is space $(enc)]} {set query(charset) $(enc)}
+
 
         http run "http://validator.w3.org/check" \
                 -post \
-                -query [list \
-                            "uri" "http://${Text}" "charset" "(detect automatically)" \
-                            "doctype" "Inline" "group" "0" \
-                        ] \
+                -query [array get query] \
                 -mark "Start" \
                 -useragent "Opera/9.61 (X11; Linux i686; U; en) Presto/2.1.1"
 
+        unset query args
         return
     }
 
@@ -79,7 +86,10 @@ proc ::w3org::run { sid } {
 
 #        debug $HttpData
 
-        if {[regexp -- \
+
+        if {[string first "Sorry! This document can not be checked." $HttpData] != -1} {
+            reply -err cant
+        } elseif {[regexp -- \
                     {<input type="text" id="uri" name="uri" value="([^\"]+)" size="50" />} \
                 $HttpData -> url]} {
 
@@ -106,8 +116,6 @@ proc ::w3org::run { sid } {
 
             unset _ -> res url
 
-        } elseif {[string first "Sorry! This document can not be checked." $HttpData] == -1} {
-            reply -err cant
         } else {
             reply -err "Ошибка"
         }
