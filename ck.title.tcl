@@ -5,19 +5,8 @@ encoding system utf-8
 ::ck::require strings
 
 namespace eval ::gettitle {
-    variable version 0.7
+    variable version 0.8
     variable author  "kns @ RusNet"
-
-
-# префиксы команд, сообщения с ними орабатываться не будут
-    variable denpr      [list "!" "\$" "%" "&" "." "-" "@" "*" "+" "~" "`" "\?"]
-
-
-# разрешенные Content-Type. маски не поддерживаются (а, может быть, поддерживаются :)))
-    variable alltypes   [list "text/html" "text/wml" "text/vnd.wap.wml" \
-                          "text/xml" "application/xml" "application/rss+xml" \
-                        ]
-
 
 # переменная, в которой будут храниться игноры
     variable tignores [list]
@@ -75,11 +64,24 @@ proc ::gettitle::init {  } {
 
 #++ configs
     config register -id "auto" -type bool -default 1 \
-        -desc "Автоматически выхватывать ссылки из сообщений на каналах" -access "n" -folder "gettitle"
+        -desc "Автоматически выхватывать ссылки из сообщений на каналах" -access "n" \
+        -folder "gettitle"
 
     config register -id "forceonchans" -type list -default [list] \
-        -desc "Форсировать автоматическую обработку сообщений в канале." -access "n" -folder "gettitle" \
-        -disableon [list "auto" 1]
+        -desc "Форсировать автоматическую обработку сообщений в канале." -access "n" \
+        -folder "gettitle" -disableon [list "auto" 1]
+
+    config register -id "denpr" -type list \
+        -default [list "!" "\$" "%" "&" "." "-" "@" "*" "+" "~" "`" "\?"] \
+        -desc "Префиксы команд, сообщения с ними орабатываться не будут" -access "n" \
+        -folder "gettitle"
+
+    config register -id "alltypes" -type list \
+        -default    [list   "text/html" "text/wml" "text/vnd.wap.wml" \
+                            "text/xml" "application/xml" "application/rss+xml" \
+                    ] \
+        -desc "Разрешенные Content-Type. маски не поддерживаются (а, может быть, поддерживаются :)))" \
+        -access "n" -folder "gettitle"
 
     config register -id "ignore" -type str -default "I|-" \
         -desc "Флаг для игнорируемых юзеров." -access "n" -folder "gettitle"
@@ -88,10 +90,12 @@ proc ::gettitle::init {  } {
         -desc "Максимальная длина выводимого заголовка" -access "n" -folder "gettitle"
 
     config register -id "maxsredirs" -type int -default 5 \
-        -desc "Максимальное число редиректов (заголовки 301,302)" -access "n" -folder "gettitle"
+        -desc "Максимальное число редиректов (заголовки 301,302)" -access "n" \
+        -folder "gettitle"
 
     config register -id "maxmredirs" -type int -default 3 \
-        -desc "Максимальное число meta-редиректов (meta refresh)" -access "n" -folder "gettitle"
+        -desc "Максимальное число meta-редиректов (meta refresh)" -access "n" \
+        -folder "gettitle"
 
     config register -id "readlimit" -type int -default 11264 \
         -desc "Максимальное число загружаемых байтов" -access "n" -folder "gettitle"
@@ -100,10 +104,14 @@ proc ::gettitle::init {  } {
         -desc "Показывать кол-во выполненных редиректов" -access "n" -folder "gettitle"
 
     config register -id "showsize" -type bool -default 0 \
-        -desc "Показывать размер файла (пока сделано только для изображений)" -access "n" -folder "gettitle"
+        -desc "Показывать размер файла (пока сделано только для изображений)" -access "n" \
+        -folder "gettitle"
 
     config register -id "showspeed" -type bool -default 0 \
         -desc "Показывать скорость получения ссылки" -access "n" -folder "gettitle"
+
+    config register -id "useragent" -type str -default "Opera/9.80 (Windows NT 5.1; U; en) Presto/2.2.15 Version/10.00" \
+        -desc "User Agent" -access "n" -folder "gettitle"
 #-- configs
 
 
@@ -142,6 +150,8 @@ proc ::gettitle::init {  } {
     }
 }
 
+#++ seturl
+## Выдергивает ссылку из строки
 proc ::gettitle::seturl {ustr} {
 
     set end [list   "\"" "'" "`" "," ";" "#" \
@@ -164,7 +174,7 @@ proc ::gettitle::seturl {ustr} {
 
     return $url
 }
-
+#-- seturl
 
 proc ::gettitle::filter { } {
     foreach_ {Text Nick UserHost Handle Channel CmdDCC CmdEvent} { upvar $_ $_ }
@@ -175,13 +185,11 @@ proc ::gettitle::filter { } {
         return
     }
 
-    variable denpr
-
     set url ""
     set ign [config get ignore]
     set binds [binds [lindex [split $Text] 0]]
 
-    if {([lsearch $denpr [string index $Text 0]] == -1) \
+    if {([lsearch [config get denpr] [string index $Text 0]] == -1) \
             && ![llength $binds] \
             && ([string match {*[a-zA-Z]*} $ign] \
                     && ![matchattr $Handle $ign $Channel]) \
@@ -243,7 +251,7 @@ proc ::gettitle::run { sid } {
             -norecode \
             -readlimit [config get readlimit] \
             -redirects [config get maxsredirs] \
-            -useragent "Opera/9.62 (X11; Linux i686; U; en) Presto/2.1.1"
+            -useragent [config get useragent]
 
         unset url
         return
@@ -262,9 +270,7 @@ proc ::gettitle::run { sid } {
 
 #        debug $HttpUrl
 
-        variable alltypes
-
-        if {([lsearch $alltypes $HttpMetaType] != -1)} {
+        if {([lsearch [config get alltypes] $HttpMetaType] != -1)} {
 
 #++ <head></head>
             set tmpdata [string tolower $HttpData]; set first "0"; set last "end"
@@ -287,7 +293,7 @@ proc ::gettitle::run { sid } {
                         -norecode \
                         -readlimit [config get readlimit] \
                         -redirects 2 \
-                        -useragent "Opera/9.62 (X11; Linux i686; U; en) Presto/2.1.1" \
+                        -useragent [config get useragent] \
                         -heads [list "Referer" $HttpUrl] \
                         -cookpack $cookie
                     session set MetaRedirs [incr MetaRedirs]
@@ -479,6 +485,8 @@ proc ::gettitle::ignore { sid } {
     return
 }
 
+#++ get_cp
+## Выдергивает кодировку из html-кода
 proc ::gettitle::get_cp {data metacp} {
     if {![regexp -nocase -- {<meta[^>]+charset\s*=\s*([^\s\"\'>]+).*?>} $data -> cp] \
             && ![regexp -nocase -- {<?xml\s+version[^>]+encoding="([^\s\'\/\>]+)"} $data -> cp]} {
@@ -500,8 +508,10 @@ proc ::gettitle::get_cp {data metacp} {
 
     return $ret
 }
+#-- get_cp
 
-#++ check_cp - correcting codepage
+#++ check_cp
+## Попытка проверки правильности выбранной кодировки
 proc ::gettitle::check_cp {title} {
 
     upvar cp cp
@@ -560,7 +570,7 @@ proc ::gettitle::get_title { sid } {
 
     set ret ""
 
-    if {![regexp -nocase -- {<title>(.+?)</title>} $data -> title] \
+    if {![regexp -nocase -- {<title>(.+?)(?:</title>|$)} $data -> title] \
             && ![regexp -nocase -- {<meta[^>]+name="title"[^>]+content="([^\"]+)"} $data -> title] \
             && ![regexp -nocase -- {<card[^>]+title="([^\"]+)"} $data -> title]} {
         debug -err "Title not found"
