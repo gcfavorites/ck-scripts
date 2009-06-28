@@ -126,7 +126,10 @@ proc ::gramotaru::run { sid } {
         }
 
         if {$data ne ""} {
-#            debug $data
+            if {[string length $data] > 800} {
+                session set CmdEvent msg
+                session set CmdReplyParam [list "-multi-max" "4"]
+            }
             reply -multi -noperson $data
         } else {
             reply -err "Ошибка разбора полученных данных"
