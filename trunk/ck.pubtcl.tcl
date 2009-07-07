@@ -1,9 +1,8 @@
 encoding system utf-8
 ::ck::require cmd
-::ck::require strings
 
 namespace eval ::pubtcl {
-    variable version 0.1
+    variable version 0.2
     variable author "kns@RusNet"
 
 
@@ -36,6 +35,20 @@ proc ::pubtcl::init {  } {
     }
 }
 
+if {[lsearch [info procs ::*time*] ::time] != -1} {
+    proc ::pubtcl::time {str} {
+        set sSsSsSs [clock clicks]
+        uplevel $str
+        set dDdDdDd [clock clicks]
+
+        if {[info exists sSsSsSs] && [info exists dDdDdDd] \
+                && ![array exists sSsSsSs] && ![array exists dDdDdDd] \
+                && [string is integer $sSsSsSs] && [string is integer $dDdDdDd]} {
+            return [expr $dDdDdDd-$sSsSsSs]
+        } else {return 0}
+    }
+}
+
 
 proc ::pubtcl::run { sid } {
     session import
@@ -44,11 +57,6 @@ proc ::pubtcl::run { sid } {
 
         session set CmdAccess [config get "access.add"]
         checkaccess -return
-
-        if {![catch {info args ::time}]} {
-            debug -err "Bad 'time' proc. See http://www.winegg.net/index.php?topic=441.msg1819#msg1819 for more inf."
-            return
-        }
 
         set ustr [join [lrange $StdArgs 1 end]]
         set RetTime [time {set RetCode [catch {eval $ustr} Result]}]
@@ -87,8 +95,7 @@ proc ::pubtcl::run { sid } {
 
         set bLine ""
         foreach_ $Result {
-            if {([string length [string trim $_]] > 0) \
-                    && ($_ ne $bLine)} {
+            if {![string is space $_] && ($_ ne $bLine)} {
                 reply $_
                 set bLine $_
             }
@@ -99,15 +106,7 @@ proc ::pubtcl::run { sid } {
 }
 
 proc ::pubtcl::conv { num } {
-    switch -exact -- $num {
-        0 {set e "OK"}
-        1 {set e "ERROR"}
-        2 {set e "RETURN"}
-        3 {set e "BREAK"}
-        4 {set e "CONTINUE"}
-        default {set e "OK"}
-    }
-    return $e
+    return [lindex {OK ERROR RETURN BREAK CONTINUE} $num]
 }
 
 ::pubtcl::init
