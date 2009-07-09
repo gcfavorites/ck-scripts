@@ -5,11 +5,13 @@ encoding system utf-8
 ::ck::require strings
 
 namespace eval ::gettitle {
-    variable version 0.8
+    variable version 0.9
     variable author  "kns @ RusNet"
 
 # переменная, в которой будут храниться игноры
     variable tignores [list]
+
+    variable lasturl [list 0 0]
 
     namespace import -force ::ck::cmd::*
     namespace import -force ::ck::http::http
@@ -73,7 +75,7 @@ proc ::gettitle::init {  } {
 
     config register -id "denpr" -type list \
         -default [list "!" "\$" "%" "&" "." "-" "@" "*" "+" "~" "`" "\?"] \
-        -desc "Префиксы команд, сообщения с ними орабатываться не будут" -access "n" \
+        -desc "Префиксы команд, сообщения с ними обрабатываться не будут" -access "n" \
         -folder "gettitle"
 
     config register -id "alltypes" -type list \
@@ -85,6 +87,9 @@ proc ::gettitle::init {  } {
 
     config register -id "ignore" -type str -default "I|-" \
         -desc "Флаг для игнорируемых юзеров." -access "n" -folder "gettitle"
+
+    config register -id "infostr" -type str -default "URL title" \
+        -desc "Слово/словосочетание, с которого будет начинаться строка вывода." -access "n" -folder "gettitle"
 
     config register -id "maxlen" -type int -default 200 \
         -desc "Максимальная длина выводимого заголовка" -access "n" -folder "gettitle"
@@ -142,7 +147,7 @@ proc ::gettitle::init {  } {
         found           &K<&R%s&K>&n найден в списке игнорирования &K(&g%s&K)&n
         notfound        &K<&R%s&K>&n не найден в списке игнорирования
 
-        ignores         список игнорования: &R%s&n.
+        ignores         список игнорирования: &R%s&n.
         join.ignores    "&K,&R "
         join.add        " &K::&R "
         join.dim        "x"
@@ -216,8 +221,18 @@ proc ::gettitle::run { sid } {
 
         if {[string first "." $url] < 1 || [string length $url] < 4} {
             if {$CmdEventMark eq ""} { reply -err badurl }
-            return
         }
+
+        variable lasturl
+
+        if {[lindex $lasturl 0] eq $url \
+                && [expr {[clock seconds] - [lindex $lasturl 1]}] < 10} {
+            set lasturl [list $url [clock seconds]]
+            debug -debug "too many requests"
+            if {$CmdEventMark eq ""} { reply -err "слишком частые запросы" }
+            return 0
+        }
+        set lasturl [list $url [clock seconds]]
 
         variable tignores
 
@@ -273,12 +288,12 @@ proc ::gettitle::run { sid } {
         if {([lsearch [config get alltypes] $HttpMetaType] != -1)} {
 
 #++ <head></head>
-            set tmpdata [string tolower $HttpData]; set first "0"; set last "end"
-            if {[set first [string first "<head>" $tmpdata]] != -1} {
-                if {[set last [string first "</head>" $tmpdata $first]] == -1} {
-                    set last "end"
-                }
-                session set HttpHead [string range $HttpData $first $last]
+            if {[regsub -nocase {<head>(.+)$} $HttpData {\1} HttpHead]} {
+                regsub -nocase {</head>.*$} $HttpHead "" HttpHead
+
+                session set HttpHead $HttpHead
+
+                debug $HttpHead
 
                 if {([set url [catch_refresh $sid]] ne "") \
                         && ($MetaRedirs < [config get maxmredirs])} {
@@ -299,12 +314,14 @@ proc ::gettitle::run { sid } {
                     session set MetaRedirs [incr MetaRedirs]
                     unset cookie
                     return
+                } else {
+                    debug -debug "No redirects; working with a full page"
+                    session set HttpHead $HttpData
                 }
             } else {
                 debug -debug "Headers are not found; working with a full page"
                 session set HttpHead $HttpData
             }
-            unset tmpdata first last
 #--
 
             set title [string stripspace [html unspec [html untag [get_title $sid]]]]
@@ -333,7 +350,7 @@ proc ::gettitle::run { sid } {
                     set redirs ""
                 }
 
-                reply -noperson -uniq "main.inf" "URL title" $GTime [cformat "main.url" $title] $redirs
+                reply -noperson -uniq "main.inf" [config get infostr] $GTime [cformat "main.url" $title] $redirs
             } else {
                 debug -debug "Title is empty"
                 if {$CmdEventMark eq ""} { reply -err "ошибка: пустой заголовок"}
@@ -570,7 +587,7 @@ proc ::gettitle::get_title { sid } {
 
     set ret ""
 
-    if {![regexp -nocase -- {<title>(.+?)(?:</title>|$)} $data -> title] \
+    if {![regexp -nocase -- {<title[^>]*>(.+?)$} [regsub -nocase -- {</title>.*$} $data ""] -> title] \
             && ![regexp -nocase -- {<meta[^>]+name="title"[^>]+content="([^\"]+)"} $data -> title] \
             && ![regexp -nocase -- {<card[^>]+title="([^\"]+)"} $data -> title]} {
         debug -err "Title not found"
