@@ -4,7 +4,7 @@ encoding system utf-8
 #::ck::require strings
 
 namespace eval ::gramotaru {
-    variable version 0.1
+    variable version 0.2
     variable author "kns@RusNet"
 
 
@@ -72,8 +72,7 @@ proc ::gramotaru::run { sid } {
                     {<h2>Искомое слово отсутствует</h2>.*<h2>Похожие слова:</h2>\s*(<p style="padding-left:10px">.+?)\s*<div} \
                 $HttpData -> data]} {
             regsub -- {<div.*$} $data "" data
-#            set data [string map [list "<br>" "" "\t" " "] $data]
- #           regsub -all -- {</?a[^>]*>} $data "" data
+            regsub -all -- {<span class="accent">([^<]+)</span>} $data {\&U\1\&U} data
 
             set w [regexp -all -inline -- {<p style="padding-left:10px">\s*<a[^>]+>\s*<(?:b|STRONG)>\s*([^<]+)</(?:b|STRONG)>} $data]
             set words [list]
@@ -95,9 +94,9 @@ proc ::gramotaru::run { sid } {
                 set data ""
             }
             unset w words x l
-        } elseif {![regexp -- \
-                    {<h2>Толково-словообразовательный</h2>\s*<div style="padding-left:10px">(.+?)</div>} \
-                $HttpData -> data]} {
+        } elseif {![regsub -- \
+                        {.*<h2>Толково-словообразовательный</h2>\s*<div style="padding-left:10px">} \
+                    $HttpData "" data]} {
 # TODO: ускорить получение части. prbl: string first
             set data "Определение в словаре не найдено."
         } else {
