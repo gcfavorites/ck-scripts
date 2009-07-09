@@ -293,7 +293,7 @@ proc ::gettitle::run { sid } {
 
                 session set HttpHead $HttpHead
 
-                debug $HttpHead
+#                debug $HttpHead
 
                 if {([set url [catch_refresh $sid]] ne "") \
                         && ($MetaRedirs < [config get maxmredirs])} {
