@@ -54,7 +54,7 @@ proc ::sfnet::run { sid } {
 #            debug "$Text :: $num"
 
             set query   [list \
-                        "words" $Text "offset" $num "sort" "score" \
+                        "words" $Text "offset" $num \
                         "limit" "1" "sortdir" "desc" "type_of_search" "soft" \
                         "pmode" "0" "Search" "Search" \
                         ]
@@ -84,17 +84,33 @@ proc ::sfnet::run { sid } {
             debug -debug "k(%s) v(%s)" $k $v
         }
 
-        set HttpData [string stripspace $HttpData]
+#        set HttpData [string stripspace $HttpData]
 
-#        debug $HttpData
+#        debug $HttpUrl
+        set reg {<td class="project">\s*<h2><a href="([^\"]+)">([^<]+)</a></h2>\s*</td>\s*}
+        append reg {<td class="select">\s*<div[^>]*>([^<]+)</div>\s*</td>\s*}
+        append reg {<td>\s*([^%]+%)\s*</td>\s*}
+        append reg {<td>\s*<a href="([^\"]+)">([^<]+)</a>\s*</td>\s*}
+        append reg {<td>\s*(\d{4}-\d{2}-\d{2})\s*</td>\s*}
+        append reg {<td>\s*(\d{4}-\d{2}-\d{2}|<span.*?</span>)\s*</td>\s*}
+        append reg {<td>\s*(\S+)\s*</td>\s*</tr>\s*}
+        append reg {<tr>\s*<td colspan="6" class="description">\s*(?:<a.*?</a>\s*)?([^<]+)<ul}
 
-        regexp -- {\s*Results\s*<strong>(\d+)&nbsp;-&nbsp;\d+</strong>\s*of\s*(\d+)\s*} $HttpData -> num of
+#        debug [regexp -all -inline -- $reg $HttpData]
 
-        if {[regexp -- {<td class="project">\s*<h2><a href="([^\"]+)">([^<]+)</a></h2>\s*</td>} $HttpData -> url name] \
-                && [regexp -- {<td>\s*<h3><a href="/project/stats/rank_history\.php\?group_id=[^\"]+">([^<]+)</a></h3>\s*</td>\s*<td>\s*(.*?)\s*</td>\s*<td>\s*(.*?)\s*</td>\s*<td>\s*(\S+)\s*</td>} $HttpData -> rank registered latest downloads] \
-                && [regexp -- {<td colspan="6" class="description">(.*?)<p>\s*<a href="/project/memberlist\.php} $HttpData -> desc]} {
 
+        if {[llength [set res [regexp -all -inline -- $reg $HttpData]]] > 0} {
+#            debug [llength $res]; return
+
+        regexp -- {<div class="yui-u first">\s*Results\D+(\d+)[^<]*<\D+(\d+)\s*</div>} $HttpData -> num of
+
+#        if {[regexp -- {<td class="project">\s*<h2><a href="([^\"]+)">([^<]+)</a></h2>\s*</td>} $HttpData -> url name] \
+#                && [regexp -- {<td>\s*<h3><a href="/project/stats/rank_history\.php\?group_id=[^\"]+">([^<]+)</a></h3>\s*</td>\s*<td>\s*(.*?)\s*</td>\s*<td>\s*(.*?)\s*</td>\s*<td>\s*(\S+)\s*</td>} $HttpData -> rank registered latest downloads] \
+#                && [regexp -- {<td colspan="6" class="description">(.*?)<p>\s*<a href="/project/memberlist\.php} $HttpData -> desc]} {
+#}
             if {$of > 1} {set c [cformat "sfnet.num" $num $of]} {set c ""}
+            lassign $res - url name rel act rurl rank registered latest downloads desc; #проверить на tcl8.4
+
 
             reply -noperson main \
                 $c \
