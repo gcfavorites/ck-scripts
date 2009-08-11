@@ -98,14 +98,13 @@ proc ::sfnet::run { sid } {
 
 #        debug [regexp -all -inline -- $reg $HttpData]
 
-        if {[regexp -- $reg $HttpData - url name rel act rurl rank registered latest downloads desc]} {
+        if {[regexp -- $reg [string stripspace $HttpData] - url name rel act rurl rank registered latest downloads desc]} {
 
             if {![regexp -- {<div class="yui-u first">\s*Results\D+(\d+)[^<]*<\D+(\d+)\s*</div>} $HttpData -> num of]} {
                 set num [set of 1]
             }
 
             if {$of > 1} {set c [cformat "sfnet.num" $num $of]} {set c ""}
-
 
             reply -noperson main \
                 $c \
