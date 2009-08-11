@@ -4,7 +4,7 @@ encoding system utf-8
 ::ck::require strings
 
 namespace eval ::sfnet {
-    variable version 0.1
+    variable version 0.2
     variable author "kns@RusNet"
 
 
@@ -94,29 +94,22 @@ proc ::sfnet::run { sid } {
         append reg {<td>\s*(\d{4}-\d{2}-\d{2})\s*</td>\s*}
         append reg {<td>\s*(\d{4}-\d{2}-\d{2}|<span.*?</span>)\s*</td>\s*}
         append reg {<td>\s*(\S+)\s*</td>\s*</tr>\s*}
-        append reg {<tr>\s*<td colspan="6" class="description">\s*(?:<a.*?</a>\s*)?([^<]+)<ul}
+        append reg {<tr>\s*<td colspan="6" class="description">(.*?)<ul class="hide" id="meta0_1">}
 
 #        debug [regexp -all -inline -- $reg $HttpData]
 
+        if {[regexp -- $reg $HttpData - url name rel act rurl rank registered latest downloads desc]} {
 
-        if {[llength [set res [regexp -all -inline -- $reg $HttpData]]] > 0} {
-#            debug [llength $res]; return
+            regexp -- {<div class="yui-u first">\s*Results\D+(\d+)[^<]*<\D+(\d+)\s*</div>} $HttpData -> num of
 
-        regexp -- {<div class="yui-u first">\s*Results\D+(\d+)[^<]*<\D+(\d+)\s*</div>} $HttpData -> num of
-
-#        if {[regexp -- {<td class="project">\s*<h2><a href="([^\"]+)">([^<]+)</a></h2>\s*</td>} $HttpData -> url name] \
-#                && [regexp -- {<td>\s*<h3><a href="/project/stats/rank_history\.php\?group_id=[^\"]+">([^<]+)</a></h3>\s*</td>\s*<td>\s*(.*?)\s*</td>\s*<td>\s*(.*?)\s*</td>\s*<td>\s*(\S+)\s*</td>} $HttpData -> rank registered latest downloads] \
-#                && [regexp -- {<td colspan="6" class="description">(.*?)<p>\s*<a href="/project/memberlist\.php} $HttpData -> desc]} {
-#}
             if {$of > 1} {set c [cformat "sfnet.num" $num $of]} {set c ""}
-            lassign $res - url name rel act rurl rank registered latest downloads desc; #проверить на tcl8.4
 
 
             reply -noperson main \
                 $c \
-                [string trim [string stripspace [html unspec $name]]] \
+                [string trim [html unspec $name]] \
                 "http://sourceforge.net${url}" \
-                [string trim [string stripspace [html unspec [html untag $desc]]]] \
+                [string trim [html unspec [html untag $desc]]] \
                 $rank
 
 #            unset _ -> url name descr section date size os rus type num len c k v tmp reg
