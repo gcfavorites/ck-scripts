@@ -54,9 +54,9 @@ proc ::sfnet::run { sid } {
 #            debug "$Text :: $num"
 
             set query   [list \
-                        "words" $Text "offset" $num \
-                        "limit" "1" "sortdir" "desc" "type_of_search" "soft" \
-                        "pmode" "0" "Search" "Search" \
+                            "words" $Text "offset" $num "limit" "1" \
+                            "sortdir" "desc" "type_of_search" "soft" \
+                            "pmode" "0" "Search" "Search" \
                         ]
 
             http run "http://sourceforge.net/search/" \
@@ -100,7 +100,9 @@ proc ::sfnet::run { sid } {
 
         if {[regexp -- $reg $HttpData - url name rel act rurl rank registered latest downloads desc]} {
 
-            regexp -- {<div class="yui-u first">\s*Results\D+(\d+)[^<]*<\D+(\d+)\s*</div>} $HttpData -> num of
+            if {![regexp -- {<div class="yui-u first">\s*Results\D+(\d+)[^<]*<\D+(\d+)\s*</div>} $HttpData -> num of]} {
+                set num [set of 1]
+            }
 
             if {$of > 1} {set c [cformat "sfnet.num" $num $of]} {set c ""}
 
