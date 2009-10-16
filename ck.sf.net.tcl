@@ -25,7 +25,7 @@ proc ::sfnet::init {  } {
         err.http            &BОшибка связи с сайтом&K:&R %s
         err.notfound        ничего не найдено.
         sfnet.num           "&K[&B%s&K/&b%s&K]&n "
-        main                %s&r%s&n :: &B&U%s&U&n :: %s :: Rank:&g %s&n.
+        main                %s&r%s&n :: &B&U%s&U&n :: %s :: Relevance:&g %s&n.
     }
 }
 
@@ -88,17 +88,17 @@ proc ::sfnet::run { sid } {
 
 #        debug $HttpUrl
         set reg {<td class="project">\s*<h2><a href="([^\"]+)">([^<]+)</a></h2>\s*</td>\s*}
-        append reg {<td class="select">\s*<div[^>]*>([^<]+)</div>\s*</td>\s*}
-        append reg {<td>\s*([^%]+%)\s*</td>\s*}
-        append reg {<td>\s*<a href="([^\"]+)">([^<]+)</a>\s*</td>\s*}
-        append reg {<td>\s*(\d{4}-\d{2}-\d{2})\s*</td>\s*}
-        append reg {<td>\s*(\d{4}-\d{2}-\d{2}|<span.*?</span>)\s*</td>\s*}
-        append reg {<td>\s*(\S+)\s*</td>\s*</tr>\s*}
-        append reg {<tr>\s*<td colspan="6" class="description">(.*?)<ul class="hide" id="meta0_1">}
+        append reg {<td>\s*<div[^>]+>([^<]+)</div>\s*</td>\s*}
+        append reg {<td>[^<]+</td>\s*}
+        append reg {<td>\s*(?:<a[^>]+>[^<]+</a>)?\s*</td>\s*}
+        append reg {<td>[^<]+</td>\s*}
+        append reg {<td>[^<]+</td>\s*}
+        append reg {<td[^>]*>[^<]+</td>\s*</tr>\s*}
+        append reg {<tr>\s*<td colspan="6" class="description">\s*(.*?)\s*<ul class="hide" id="meta0_1">}
 
 #        debug [regexp -all -inline -- $reg $HttpData]
 
-        if {[regexp -- $reg [string stripspace $HttpData] - url name rel act rurl rank registered latest downloads desc]} {
+        if {[regexp -- $reg [string stripspace $HttpData] - url name rel desc]} {
 
             if {![regexp -- {<div class="yui-u first">\s*Results\D+(\d+)[^<]*<\D+(\d+)\s*</div>} $HttpData -> num of]} {
                 set num [set of 1]
@@ -111,9 +111,9 @@ proc ::sfnet::run { sid } {
                 [string trim [html unspec $name]] \
                 "http://sourceforge.net${url}" \
                 [string trim [html unspec [html untag $desc]]] \
-                $rank
+                $rel
 
-#            unset _ -> url name descr section date size os rus type num len c k v tmp reg
+#            unset -nocomplain _ -> url name descr section date size os rus type num len c k v tmp reg
         } else {
 #            debug -err "хуй"
             reply -err notfound
