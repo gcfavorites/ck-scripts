@@ -74,6 +74,10 @@ proc ::calc::run { sid } {
 
   set val 0
 
+  if {[string first "**" $ex] != -1} {
+  	reply -err "ЕГГОГ"
+  }
+
   if { [catch {expr 1.0 * $ex} val] || ($val eq "Inf")} {
     reply -err expr
   }
