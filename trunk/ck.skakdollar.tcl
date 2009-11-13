@@ -36,7 +36,7 @@ proc ::skakdollar::run { sid } {
 
     if { $Event eq "CmdPass" } {
 
-        set Text [string stripspace [string map [list "\[" "" "\]" "" "\{" "" "\}" ""] [join [lrange $StdArgs 1 end]]]]
+        set Text [string stripspace [string map [list "\[" "" "\]" "" "\{" "" "\}" "" "'" "" "`" ""] [join [lrange $StdArgs 1 end]]]]
 
 		if {$Text eq ""} { replydoc skakdollar }
 
