@@ -142,11 +142,11 @@ proc ::smfegg::parse {ustr} {
         		"starter" -
         		"poster" -
         		"board" {
-        			set $_ [lefttofirst "</name>" [rightfromfirst "<name>" $tmp]]
+        			set $_ [lefttofirst "</name>" [rightfromfirst "<name>" [set $_]]]
         		}
 
         		"topic" {
-        			set $_ [lefttofirst "</subject>" [rightfromfirst "<subject>" $tmp]]
+        			set $_ [lefttofirst "</subject>" [rightfromfirst "<subject>" [set $_]]]
         		}
         	}
         	
