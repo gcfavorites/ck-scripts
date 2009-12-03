@@ -106,31 +106,61 @@ proc ::smfegg::run { sid } {
     return
 }
 
-proc ::smfegg::parse { data } {
-
-    set data [[namespace current]::xml_list_create [string stripspace $data]]
-
-    set path [[namespace current]::xml_join_tags [list 0 "smf:xml-feed"] [list] -1 "recent-post"]
-    set count [[namespace current]::xml_get_info $data $path]
-
-    set tmp [list]
-
-    for {set i 0} {$i < $count} {incr i} {
-        foreach_    [list "time" "subject" "body" "link" \
-                            [list "starter" 0 "name"] [list "poster" 0 "name"] \
-                            [list "topic" 0 "subject"] [list "board" 0 "name"] \
-                    ] {
-            set ttmp([lindex $_ 0]) [lindex [join [[namespace current]::cookie_replace [concat [list 0 "smf:xml-feed" $i "recent-post" 0] $_] $data]] 1]
-        }
-        lappend tmp [array get ttmp]
-        unset ttmp _
+proc ::smfegg::lefttofirst {pt ustr} {
+    if {[set end [string first $pt $ustr]] == -1} {
+        set end "end"
+    } else {
+        incr end -1
     }
 
-#    debug $tmp
+    return [string range $ustr 0 $end]
+}
 
-    unset data path count i
+proc ::smfegg::rightfromfirst {pt ustr} {
+    if {[set start [string first $pt $ustr]] == -1} {
+        set start "0"
+    } else {
+        incr start [string length $pt]
+    }
 
-    return $tmp
+    return [string range $ustr ${start} end]
+}
+
+proc ::smfegg::parse {ustr} {
+
+ 	set newlist [list]
+
+	set ustr [string stripspace $ustr]
+
+    while {[string match "*<recent-post>*</recent-post>*" $ustr]} {
+        set tmp [rightfromfirst "<recent-post>" $ustr]
+        set tmp [lefttofirst "</recent-post>" $tmp]
+        array set tlist [list]
+        foreach_ [list time id subject body starter poster topic board link] {
+        	set $_ [lefttofirst "</${_}>" [rightfromfirst "<${_}>" $tmp]]
+        	switch -exact -- $_ {
+        		"starter" -
+        		"poster" -
+        		"board" {
+        			set $_ [lefttofirst "</name>" [rightfromfirst "<name>" $tmp]]
+        		}
+
+        		"topic" {
+        			set $_ [lefttofirst "</subject>" [rightfromfirst "<subject>" $tmp]]
+        		}
+        	}
+        	
+        	while {[regsub -- {<!\[CDATA\[(.*)\]\]>} [set $_] {\1} $_]} {continue}
+        
+            set tlist($_) [string trim [set $_]]
+        }
+
+        lappend newlist [array get tlist]
+        unset tmp tlist
+        set ustr [rightfromfirst "</recent-post>" $ustr]
+    }
+
+    return $newlist
 }
 
 proc ::smfegg::checkupdate { {sid ""} } {
@@ -210,261 +240,6 @@ proc ::smfegg::checkupdate { {sid ""} } {
     return
 }
 
-#
-# XML Functions
-##
-
-proc ::smfegg::xml_list_create {xml_data} {
-    set xml_list [list]
-    set ns_current [namespace current]
-
-    set ptr 0
-    while {[set tag_start [${ns_current}::xml_get_position $xml_data $ptr]] != ""} {
-        set tag_start_first [lindex $tag_start 0]
-        set tag_start_last [lindex $tag_start 1]
-
-        set tag_string [string range $xml_data $tag_start_first $tag_start_last]
-
-        # move the pointer to the next character after the current tag
-        set last_ptr $ptr
-        set ptr [expr { $tag_start_last + 2 }]
-
-        array set tag [list]
-        # match 'special' tags that dont close
-        if {[regexp -nocase -- {^!(\[CDATA|--|DOCTYPE)} $tag_string]} {
-            set tag_data $tag_string
-
-            regexp -nocase -- {^!\[CDATA\[(.*?)\]\]$} $tag_string -> tag_data
-            regexp -nocase -- {^!--(.*?)--$} $tag_string -> tag_data
-
-            if {[info exists tag_data]} {
-                set tag(data) [${ns_current}::xml_escape $tag_data]
-            }
-        } else {
-            # we should only ever encounter opening tags, if we hit a closing one somethings wrong
-            if {[string match {[/]*} $tag_string]} {
-                putlog "\002RSS Malformed Feed\002: Tag not open: \"<$tag_string>\" ($tag_start_first => $tag_start_last)"
-                continue
-            }
-
-            # split up the tag name and attributes
-            regexp -- {(.[^ \/\n\r]*)(?: |\n|\r\n|\r|)(.*?)$} $tag_string -> tag_name tag_args
-            set tag(name) [${ns_current}::xml_escape $tag_name]
-
-            # split up all of the tags attributes
-            set tag(attrib) [list]
-            if {[string length $tag_args] > 0} {
-                set values [regexp -inline -all -- {(?:\s*|)(.[^=]*)=["'](.[^"']*)["']} $tag_args]
-
-                foreach {r_match r_tag r_value} $values {
-                    lappend tag(attrib) [${ns_current}::xml_escape $r_tag] [${ns_current}::xml_escape $r_value]
-                }
-            }
-#"##
-            # find the end tag of non-self-closing tags
-            if {(![regexp {(\?|!|/)(\s*)$} $tag_args]) || \
-                (![string match "\?*" $tag_string])} {
-                set tmp_num 1
-                set tag_success 0
-                set tag_end_last $ptr
-
-                # find the correct closing tag if there are nested elements
-                #  with the same name
-                while {$tmp_num > 0} {
-                    # search for a possible closing tag
-                    set tag_success [regexp -indices -start $tag_end_last -- "</$tag_name>" $xml_data tag_end]
-
-                    set last_tag_end_last $tag_end_last
-
-                    set tag_end_first [lindex $tag_end 0]
-                    set tag_end_last [lindex $tag_end 1]
-
-                    # check to see if there are any NEW opening tags within the
-                    #  previous closing tag and the new closing one
-                    incr tmp_num [regexp -all -- "<$tag_name\(|.\[^>\]+\)>" [string range $xml_data $last_tag_end_last $tag_end_last]]
-
-                    incr tmp_num -1
-                }
-
-                if {$tag_success == 0} {
-                    putlog "\002RSS Malformed Feed\002: Tag not closed: \"<$tag_name>\""
-                    return
-                }
-
-                # set the pointer to after the last closing tag
-                set ptr [expr { $tag_end_last + 1 }]
-
-                # remember tag_start*'s character index doesnt include the tag start and end characters
-                set xml_sub_data [string range $xml_data [expr { $tag_start_last + 2 }] [expr { $tag_end_first - 1 }]]
-
-                # recurse the data within the currently open tag
-                set result [${ns_current}::xml_list_create $xml_sub_data]
-
-                # set the list data returned from the recursion we just performed
-                if {[llength $result] > 0} {
-                    set tag(children) $result
-
-                # set the current data we have because we're already at the end of a branch
-                #  (ie: the recursion didnt return any data)
-                } else {
-                    set tag(data) [${ns_current}::xml_escape $xml_sub_data]
-                }
-            }
-        }
-
-
-### CHANGED
-
-#        debug "\"$xml_data\""
-
-        # insert any plain data that appears before the current element
-        if {($last_ptr != [expr { $tag_start_first - 1 }]) \
-                && ([string trim [set tmp [${ns_current}::xml_escape [string range $xml_data $last_ptr [expr { $tag_start_first - 2 }]]]]] ne "")} {
-            lappend xml_list [list "data" $tmp]
-            unset tmp
-        }
-
-        # inset tag data
-        lappend xml_list [array get tag]
-
-        unset tag
-    }
-
-    # if there is still plain data left add it
-    if {$ptr < [string length $xml_data]} {
-        lappend xml_list [list "data" [${ns_current}::xml_escape [string range $xml_data $ptr end]]]
-    }
-
-    return $xml_list
-}
-
-# simple escape function
-proc ::smfegg::xml_escape {string} {
-    regsub -all -- {([\{\}])} $string {\\\1} string
-
-    return $string
-}
-
-# this function is to replace:
-#  regexp -indices -start $ptr {<(!\[CDATA\[.+?\]\]|!--.+?--|!DOCTYPE.+?|.+?)>} $xml_data -> tag_start
-# which doesnt work correctly with tcl's re_syntax
-proc ::smfegg::xml_get_position {xml_data ptr} {
-    set tag_start [list -1 -1]
-
-    regexp -indices -start $ptr {<(.+?)>} $xml_data -> tmp(tag)
-    regexp -indices -start $ptr {<(!--.*?--)>} $xml_data -> tmp(comment)
-    regexp -indices -start $ptr {<(!DOCTYPE.+?)>} $xml_data -> tmp(doctype)
-    regexp -indices -start $ptr {<(!\[CDATA\[.+?\]\])>} $xml_data -> tmp(cdata)
-
-    # 'tag' regexp should be compared last
-    foreach name [lsort [array names tmp]] {
-        set tmp_s [split $tmp($name)]
-        if {( ([lindex $tmp_s 0] < [lindex $tag_start 0]) && \
-              ([lindex $tmp_s 0] > -1) ) || \
-            ([lindex $tag_start 0] == -1)} {
-            set tag_start $tmp($name)
-        }
-    }
-
-    if {([lindex $tag_start 0] == -1) || \
-        ([lindex $tag_start 1] == -1)}  {
-        set tag_start ""
-    }
-
-    return $tag_start
-}
-
-# returns information on a data structure when given a path.
-#  paths can be specified using: [struct number] [struct name] <...>
-proc ::smfegg::xml_get_info {xml_list path {element "data"}} {
-    set i 0
-
-    foreach {t_data} $xml_list {
-        array set t_array $t_data
-
-        # if the name doesnt exist set it so we can still reference the data
-        #  using the 'stuct name' *
-        if {![info exists t_array(name)]} {
-            set t_array(name) ""
-        }
-
-        if {[string match -nocase [lindex $path 1] $t_array(name)]} {
-
-            if {$i == [lindex $path 0]} {
-                set result ""
-
-                if {([llength $path] == 2) && \
-                    ([info exists t_array($element)])} {
-                    set result $t_array($element)
-                } elseif {[info exists t_array(children)]} {
-                    # shift the first path reference of the front of the path and recurse
-                    set result [[namespace current]::xml_get_info $t_array(children) [lreplace $path 0 1] $element]
-                }
-
-                return $result
-            }
-
-            incr i
-        }
-
-        unset t_array
-    }
-
-    if {[lindex $path 0] == -1} {
-        return $i
-    }
-}
-
-# converts 'args' into a list in the same order
-proc ::smfegg::xml_join_tags {args} {
-    set list [list]
-
-    foreach tag $args {
-        foreach item $tag {
-            if {[string length $item] > 0} {
-                lappend list $item
-            }
-        }
-    }
-
-    return $list
-}
-
-#-------------
-
-#
-# Cookie Parsing Functions
-##
-
-proc ::smfegg::cookie_replace {cookie data} {
-    set element "children"
-
-    set tags [list]
-    foreach {num section} $cookie {
-        if {[string equal "=" [string range $section 0 0]]} {
-            set attrib [string range $section 1 end]
-            set element "attrib"
-            break
-        } else {
-            lappend tags $num $section
-        }
-    }
-
-    set return [[namespace current]::xml_get_info $data $tags $element]
-
-    if {[string equal -nocase "attrib" $element]} {
-        array set tmp $return
-
-        if {[catch {set return $tmp($attrib)}] != 0} {
-            return
-        }
-    }
-
-    return $return
-}
-
-#--------------
-
 proc ::smfegg::frmt { sid ustr } {
     session import
 
@@ -486,7 +261,7 @@ proc ::smfegg::frmt { sid ustr } {
 #    debug "body after: $body"
 
     if {[string length $body] > 200} {
-        set body [string trimright [string range $body 0 197] [list "." " " "," ":" ";"]]
+        set body [string trimright [string range $body 0 197] ". ,:;"]
         append body "..."
     }
 
