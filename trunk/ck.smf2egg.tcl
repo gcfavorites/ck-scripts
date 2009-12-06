@@ -4,7 +4,7 @@ encoding system utf-8
 ::ck::require cache
 
 namespace eval ::smfegg {
-    variable version 0.2
+    variable version 0.3
     variable author "kns@RusNet"
 
     namespace import -force ::ck::cmd::*
@@ -136,7 +136,7 @@ proc ::smfegg::parse {ustr} {
         set tmp [rightfromfirst "<recent-post>" $ustr]
         set tmp [lefttofirst "</recent-post>" $tmp]
         array set tlist [list]
-        foreach_ [list time id subject body starter poster topic board link] {
+        foreach_ [list time id subject body starter poster topic board] {
         	set $_ [lefttofirst "</${_}>" [rightfromfirst "<${_}>" $tmp]]
         	switch -exact -- $_ {
         		"starter" -
@@ -149,11 +149,15 @@ proc ::smfegg::parse {ustr} {
         			set $_ [lefttofirst "</subject>" [rightfromfirst "<subject>" [set $_]]]
         		}
         	}
-        	
+
         	while {[regsub -- {<!\[CDATA\[(.*)\]\]>} [set $_] {\1} $_]} {continue}
         
             set tlist($_) [string trim [set $_]]
         }
+		
+		if {![regexp -- {</board>\s*<link>([^<]+)</link>} $tmp tlist(link) tlist(link)]} {
+			set tlist(link) ""
+		}
 
         lappend newlist [array get tlist]
         unset tmp tlist
