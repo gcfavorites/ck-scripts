@@ -95,13 +95,22 @@ proc ::gramotaru::run { sid } {
             }
             unset w words x l
         } elseif {![regsub -- \
-                        {.*<h2>Толково-словообразовательный</h2>\s*<div style="padding-left:10px">} \
+                        {.*<h2>Большой толковый словарь</h2>\s*<div style="padding-left:10px">} \
                     $HttpData "" data]} {
 # TODO: ускорить получение части. prbl: string first
             set data "Определение в словаре не найдено."
         } else {
             regsub -- {</div>.*$} $data "" data
-            set data [string map [list "<B>" "&L" "</B>" "&L" "<br><li>" "<li>" "<br><br></OL><br>" "\n" "<OL>" "" "\t" " "] $data]
+#            set data [string map [list "<b>" "&L" "</b>" "&L" "<br><li>" "<li>" "<br><br></OL><br>" "\n" "<OL>" "" "\t" " " "<i>" "" "</i>" "" "<br>" ""] $data]
+#            set data [string map [list "<b>" "&L" "</b>" "&L" "<br><b>" "\n" "<b><br>" "" "\t" " " "<i>" "" "</i>" "" "<br>" ""] $data]
+
+			set signs [list]
+			
+			regsub -- {^(.*?)<br><b>\s*1\.</b><br>} $data {\1} data
+			regsub -all -- {<br><b>\s*\d+\.</b><br>} $data "\n" data
+			set data [string map [list "<b>" "&L" "</b>" "&L" "\t" " " "<i>" "" "</i>" "" "<br>" ""] $data]
+
+#			debug $data
 
             set signs [split [string trim $data] \n]
             set lsigns [llength $signs]
@@ -113,6 +122,8 @@ proc ::gramotaru::run { sid } {
             regsub -all -- {<span class="accent">([^<]+)</span>} $data {\&U\1\&U} data
             regsub -all -nocase -- {<SUP>[^<]+</SUP>} $data "" data
             regsub -all -- {\(([^\)]+)\)} $data {\&K(\1)\&n} data
+	
+#			debug [join $signs "\n===\n"]
 
             set x 0; regsub -- {<li>} $data ": [incr x]. " data
             while {[regsub -- {<li>} $data " [incr x]. " data]} {continue}
