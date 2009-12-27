@@ -279,7 +279,7 @@ proc ::weather::filt { offset data } {
   set result [list]
   set last 0
   array set {} $data
-  foreach_ [lsort -integer [array names {}]] {
+  foreach_ [lsort -integer -decreasing [array names {}]] {
     if { !$last } { set last $_ }
     if { $offset } {
       if { [string equal -length 8 $_ $last] } continue
