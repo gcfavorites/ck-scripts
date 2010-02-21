@@ -6,8 +6,9 @@ encoding system utf-8
 ::ck::require strings 0.3
 
 namespace eval ::weather {
-  variable version 1.0
+  variable version 1.1
   variable author "Chpock <chpock@gmail.com>"
+  variable editor "kns@RusNet"
 
   namespace import -force ::ck::cmd::*
   namespace import -force ::ck::http::http
@@ -125,7 +126,9 @@ proc ::weather::run { sid } {
   }
 
   if { $WeatherStatus < 0 } { reply -err parse $CityName }
+#  debug "WeatherData1: $WeatherData"
   set WeatherData [filt $WeatherOffset $WeatherData]
+#  debug "WeatherData2: $WeatherData"
   if { ![llength $WeatherData] } { reply -err nodata $CityName }
 
   set data [list]
@@ -239,7 +242,7 @@ proc ::weather::weather_request { sid } {
   if { $Event eq "SessionInit" } {
     cache makeid $RequestCityNum
     if { ![cache get HttpData] } {
-      http run "http://gen.gismeteo.ru/plnt/T${RequestCityNum}.TXT" -return
+      http run "http://informer.gismeteo.ru/xml/${RequestCityNum}_1.xml" -return
     }
   } elseif { $Event eq "HttpResponse" } {
     if { $HttpStatus < 0 } {
@@ -250,20 +253,36 @@ proc ::weather::weather_request { sid } {
   }
 
   array set result [list]
-  foreach_ [split $HttpData \n] {
-    debug -raw "data: %s" $_
-    if { [llength [set_ [split_ ,]]] != 17 } continue
-    array set {} [list]
-    foreach_ $_ {
-      if { [llength [set_ [split_ =]]] != 2 } { unset {}; break }
-      set ([lindex_ 0]) [lindex_ 1]
-    }
-    if { ![array exists {}] } continue
-    set id "$(Year)[0 $(Month)][0 $(Day)][0 $(Hour)]"
-    set result($id) [array get {}]
-    unset {}
-  }
+  
+#  debug "HttpData: %s" $HttpData
+  
+  foreach [list _ \
+  				Day Month Year Hour \
+  				Cloud Precip MaxP MinP \
+  				MaxT MinT MinW MaxW \
+  				RumbW MaxRW MinRW MinHT MaxHT] \
+  			 [regexp -all -inline -- \
+  			 		{<FORECAST day="([^\"]+)" month="([^\"]+)" year="([^\"]+)" hour="([^\"]+)"[^>]*>\s*<PHENOMENA cloudiness="([^\"]+)" precipitation="([^\"]+)"[^>]*>\s*<PRESSURE max="([^\"]+)" min="([^\"]+)"/>\s*<TEMPERATURE max="([^\"]+)" min="([^\"]+)"/>\s*<WIND min="([^\"]+)" max="([^\"]+)" direction="([^\"]+)"/>\s*<RELWET max="([^\"]+)" min="([^\"]+)"/>\s*<HEAT min="([^\"]+)" max="([^\"]+)"/>\s*</FORECAST>} \
+  			 	$HttpData] {
+  				
+		debug -raw "data: %s" "$Day $Month $Year $Hour $Cloud $Precip $MaxP $MinP $MaxT $MinT $MinW $MaxW $RumbW $MaxRW $MinRW $MinHT $MaxHT"
 
+
+		array set {} [list]
+		foreach _ [list \
+  							Day Month Year Hour \
+  							Cloud Precip MaxP MinP \
+  							MaxT MinT MinW MaxW \
+  							RumbW MaxRW MinRW MinHT MaxHT \
+  					  ] {
+  			set ($_) [set $_]
+  		}
+  		
+  		set id "$(Year)[0 $(Month)][0 $(Day)][0 $(Hour)]"
+  		set result($id) [array get {}]
+  		unset {}
+  }
+  
   if { ![array size result] } {
     debug -err "while parsing data:"
     foreach_ [split $HttpData \n] {
@@ -279,7 +298,7 @@ proc ::weather::filt { offset data } {
   set result [list]
   set last 0
   array set {} $data
-  foreach_ [lsort -integer -decreasing [array names {}]] {
+  foreach_ [lsort -integer [array names {}]] {
     if { !$last } { set last $_ }
     if { $offset } {
       if { [string equal -length 8 $_ $last] } continue
