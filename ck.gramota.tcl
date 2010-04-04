@@ -4,13 +4,13 @@ encoding system utf-8
 #::ck::require strings
 
 namespace eval ::gramotaru {
-    variable version 0.2
+    variable version 0.3
     variable author "kns@RusNet"
 
 
     namespace import -force ::ck::cmd::*
     namespace import -force ::ck::http::http
-#    namespace import -force ::ck::strings::html
+    namespace import -force ::ck::strings::html
 }
 
 proc ::gramotaru::init {  } {
@@ -140,7 +140,7 @@ proc ::gramotaru::run { sid } {
                 session set CmdEvent msg
                 session set CmdReplyParam [list "-multi-max" "4"]
             }
-            reply -multi -noperson $data
+            reply -multi -noperson [html untag [html unspec $data]]
         } else {
             reply -err "Ошибка разбора полученных данных"
         }
