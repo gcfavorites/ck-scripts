@@ -60,6 +60,7 @@ proc ::gcalc::run { sid } {
         
 #        debug -info $HttpData
 		regsub -all -- {<sup>([^<]+)</sup>} $HttpData {^\1} HttpData
+		regsub -all -- {<font[^>]*>([^<]+)</font>} $HttpData {\1} HttpData
 		set HttpData [string map {&#215; *} $HttpData]
 		
 		if {[regexp -- {<img src=/images/calc_img\.gif[^>]*><td>&nbsp;<td nowrap ><h2[^>]*><b>([^<]+)</b></h2><tr><td>} $HttpData - res]} {
