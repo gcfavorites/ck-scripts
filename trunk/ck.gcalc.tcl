@@ -36,7 +36,7 @@ proc ::gcalc::run { sid } {
 
 		set Text [join [lrange $StdArgs 1 end]]
 
-		debug -info $Text
+#		debug -info $Text
 
 		http run "http://www.google.com/search" \
 				-query [list q $Text hl ru num 1] \
@@ -58,12 +58,12 @@ proc ::gcalc::run { sid } {
             debug -debug "k(%s) v(%s)" $k $v
         }
         
-#        debug -info $HttpData
+#        debug -info "$HttpUrl\n\n$HttpData"
 		regsub -all -- {<sup>([^<]+)</sup>} $HttpData {^\1} HttpData
 		regsub -all -- {<font[^>]*>([^<]+)</font>} $HttpData {\1} HttpData
 		set HttpData [string map {&#215; *} $HttpData]
 		
-		if {[regexp -- {<img src=/images/calc_img\.gif[^>]*><td>&nbsp;<td nowrap ><h2[^>]*><b>([^<]+)</b></h2><tr><td>} $HttpData - res]} {
+		if {[regexp -- {<img src="/images/icons/onebox/calculator-40\.gif"[^>]*><td>&nbsp;<td[^>]*><h2[^>]*><b>([^<]+)</b></h2>} $HttpData - res]} {
 			reply main  [html unspec [html untag $res]]
 		} else {
 			reply -err "Ничего"
